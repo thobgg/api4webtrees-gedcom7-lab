@@ -22,6 +22,7 @@ use Fisharebest\Webtrees\Module\ModuleInterface;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\Repository;
 use Fisharebest\Webtrees\GedcomRecord;
+use Fisharebest\Webtrees\Note;
 use Fisharebest\Webtrees\Source;
 use Fisharebest\Webtrees\Services\CalendarService;
 use Fisharebest\Webtrees\Services\LinkedRecordService;
@@ -359,12 +360,12 @@ trait ReadActions
     private function availableModules(Tree $tree, UserInterface $user): array
     {
         $module_service = Registry::container()->get(ModuleService::class);
-        $user_level     = Auth::accessLevel($tree, $user);
+        $user_level     = Compat::level(Auth::accessLevel($tree, $user));
 
         return $module_service->all()
             ->filter(static fn (ModuleInterface $module): bool => $module_service->componentsWithAccess()
                 ->filter(static fn (string $interface): bool => $module instanceof $interface)
-                ->every(static fn (string $interface): bool => $module->accessLevel($tree, $interface) >= $user_level))
+                ->every(static fn (string $interface): bool => Compat::level($module->accessLevel($tree, $interface)) >= $user_level))
             ->map(static fn (ModuleInterface $module): string => $module->name())
             ->sort()
             ->values()
@@ -945,7 +946,7 @@ trait ReadActions
         $offset = ($page - 1) * self::EXPORT_PAGE_SIZE;
 
         // Dieselbe Stufe, die webtrees fuer Verknuepfungen nimmt (siehe Individual::childFamilies()).
-        $link_level = $tree->getPreference('SHOW_PRIVATE_RELATIONSHIPS') === '1' ? Auth::PRIV_HIDE : Auth::accessLevel($tree);
+        $link_level = $tree->getPreference('SHOW_PRIVATE_RELATIONSHIPS') === '1' ? Compat::access(Compat::HIDDEN) : Auth::accessLevel($tree);
 
         $individual_count = DB::table('individuals')->where('i_file', '=', $tree->id())->count();
         $family_count     = DB::table('families')->where('f_file', '=', $tree->id())->count();
@@ -1104,7 +1105,7 @@ trait ReadActions
             ->map(Registry::sourceFactory()->mapper($tree))
             ->filter(static fn ($source): bool => $source instanceof Source && $source->canShow())
             ->map(fn (Source $source): array => $this->sourceSummary($source) + ['uses' => (int) ($uses[$source->xref()] ?? 0)])
-            ->sort(static fn (array $a, array $b): int => I18N::comparator()($a['title'], $b['title']))
+            ->sort(static fn (array $a, array $b): int => Compat::comparator()($a['title'], $b['title']))
             ->values()
             ->all();
 
@@ -1133,7 +1134,7 @@ trait ReadActions
                 'canEdit' => $repo->canEdit(),
                 'uses'    => (int) ($uses[$repo->xref()] ?? 0),
             ])
-            ->sort(static fn (array $a, array $b): int => I18N::comparator()($a['name'], $b['name']))
+            ->sort(static fn (array $a, array $b): int => Compat::comparator()($a['name'], $b['name']))
             ->values()
             ->all();
 

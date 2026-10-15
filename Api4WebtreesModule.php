@@ -36,6 +36,7 @@ use function is_file;
 use function is_string;
 use function json_decode;
 use function preg_match;
+use function preg_quote;
 use function response;
 use function str_contains;
 use function str_starts_with;
@@ -302,6 +303,20 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
     }
 
     /**
+     * Nennt die Adresse einen Stammbaum, z. B. .../module/_api4webtrees_/Individuals/<tree>?
+     */
+    private function routeNamesTree(ServerRequestInterface $request): bool
+    {
+        $route = Validator::queryParams($request)->string('route', '');
+
+        if ($route === '') {
+            $route = $request->getUri()->getPath();
+        }
+
+        return preg_match('#/module/' . preg_quote($this->name(), '#') . '/[^/]+/[^/]+#', $route) === 1;
+    }
+
+    /**
      * Darf die App diesen Stammbaum erreichen? Ohne gespeicherte Einstellung: ja (wie vor Version 0.8).
      */
     private function treeEnabled(Tree $tree): bool
@@ -323,6 +338,13 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
             // Vom Verwalter nicht fuer die App freigegebene Baeume sind ueber dieses Modul gar nicht erreichbar -
             // unabhaengig davon, was das Konto in webtrees selbst duerfte.
             $tree = $request->getAttribute('tree');
+
+            // webtrees 2.3 setzt "tree" auf null, wenn der Benutzer den Baum nicht sehen darf. Ohne diese Pruefung kaeme
+            // eine HTML-Fehlerseite von webtrees, die die angefragte Adresse samt Parametern wiederholt. Wie ein Baum, den
+            // es nicht gibt: ein Gast erfaehrt nicht, ob ein privater Baum existiert.
+            if ($tree === null && $this->routeNamesTree($request)) {
+                return $this->error(404, 'not-found');
+            }
 
             if ($tree instanceof Tree && !$this->treeEnabled($tree) && !str_contains(strtolower((string) $request->getAttribute('action')), 'admin')) {
                 return $this->error(403, 'tree-disabled');
@@ -347,7 +369,7 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
      */
     private function matchLanguage(string $wanted): string|null
     {
-        $tags    = array_map(static fn ($locale): string => $locale->languageTag(), I18N::activeLocales());
+        $tags    = Compat::activeLanguageTags();
         $wanted  = strtolower($wanted);
         $primary = explode('-', $wanted)[0];
 

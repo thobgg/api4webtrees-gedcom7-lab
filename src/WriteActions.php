@@ -1385,7 +1385,7 @@ trait WriteActions
         // Ein Schreibvorgang statt einem je Verknuepfung - also auch nur eine ausstehende Aenderung.
         $lines = ['0 @' . $record->xref() . '@ ' . $record->tag()];
 
-        foreach ($record->facts([], false, Auth::PRIV_HIDE, true) as $fact) {
+        foreach ($record->facts([], false, Compat::access(Compat::HIDDEN), true) as $fact) {
             if (!in_array($fact, $links, true)) {
                 $lines[] = $fact->gedcom();
             }
@@ -1416,7 +1416,7 @@ trait WriteActions
             return $this->error(404, 'link-not-found');
         }
 
-        $first = $record->facts(['OBJE'], false, Auth::PRIV_HIDE, true)->first();
+        $first = $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)->first();
 
         // Ab Stufe 35 auch nach GEDCOM-L: "2 _PRIM Y" an diesem Verweis, an den anderen Verweisen faellt _PRIM weg -
         // so zeigen andere Programme dasselbe Hauptbild wie webtrees (das erste Bild).
@@ -1426,7 +1426,7 @@ trait WriteActions
             return substr($gedcom, 1);
         };
         $schon = $first === $links[0] && strtoupper(trim($links[0]->attribute('_PRIM'))) === 'Y'
-            && $record->facts(['OBJE'], false, Auth::PRIV_HIDE, true)->filter(static fn (Fact $f): bool => $f !== $links[0] && $f->attribute('_PRIM') !== '')->isEmpty();
+            && $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)->filter(static fn (Fact $f): bool => $f !== $links[0] && $f->attribute('_PRIM') !== '')->isEmpty();
 
         if ($schon) {
             return $this->written($record);
@@ -1434,7 +1434,7 @@ trait WriteActions
 
         $lines = ['0 @' . $record->xref() . '@ ' . $record->tag()];
 
-        foreach ($record->facts([], false, Auth::PRIV_HIDE, true) as $fact) {
+        foreach ($record->facts([], false, Compat::access(Compat::HIDDEN), true) as $fact) {
             if ($fact === $first) {
                 $lines[] = $prim($links[0], true);
             }
@@ -1460,7 +1460,7 @@ trait WriteActions
             return [];
         }
 
-        return $record->facts(['OBJE'], false, Auth::PRIV_HIDE, true)
+        return $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)
             ->filter(static fn (Fact $fact): bool => $fact->value() === '@' . $media_xref . '@')
             ->values()
             ->all();

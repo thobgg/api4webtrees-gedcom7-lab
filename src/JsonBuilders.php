@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Api4Webtrees;
 
-use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\Elements\RelationIsDescriptor;
 use Fisharebest\Webtrees\Elements\UnknownElement;
@@ -65,7 +64,7 @@ trait JsonBuilders
             }
         }
 
-        return $individual->sex();
+        return Compat::sex($individual);
     }
 
     /**
@@ -120,7 +119,7 @@ trait JsonBuilders
             // sehen duerften - fuer Buecher zum Weitergeben ("nur, was Besucher sehen")
             'access'     => $this->zugang($individual),
             // wer den Namen sehen darf - bei Lebenden haengt das an der Baumeinstellung "Namen Lebender zeigen"
-            'nameAccess' => $individual->canShowName(Auth::PRIV_PRIVATE) ? 'visitor' : ($individual->canShowName(Auth::PRIV_USER) ? 'member' : 'manager'),
+            'nameAccess' => $individual->canShowName(Compat::access(Compat::PUBLIC)) ? 'visitor' : ($individual->canShowName(Compat::access(Compat::MEMBER)) ? 'member' : 'manager'),
             'restricted' => $this->eingeschraenkt($individual),
             'lifespan'   => $this->plain($individual->lifespan()),
             'birth'      => $this->eventJson($individual->getBirthDate(), $individual->getBirthPlace()),
@@ -375,11 +374,11 @@ trait JsonBuilders
      */
     private function zugang(GedcomRecord|Fact $x): string
     {
-        if ($x->canShow(Auth::PRIV_PRIVATE)) {
+        if ($x->canShow(Compat::access(Compat::PUBLIC))) {
             return 'visitor';
         }
 
-        return $x->canShow(Auth::PRIV_USER) ? 'member' : 'manager';
+        return $x->canShow(Compat::access(Compat::MEMBER)) ? 'member' : 'manager';
     }
 
     /**
@@ -390,12 +389,12 @@ trait JsonBuilders
      */
     private function eingeschraenkt(Individual $individual): array
     {
-        if (!$individual->canShow(Auth::PRIV_PRIVATE)) {
+        if (!$individual->canShow(Compat::access(Compat::PUBLIC))) {
             return [];
         }
         $tags = [];
         foreach ($individual->facts(['BIRT', 'CHR', 'BAPM', 'DEAT', 'BURI', 'CREM', 'OCCU']) as $fact) {
-            if (!$fact->canShow(Auth::PRIV_PRIVATE)) {
+            if (!$fact->canShow(Compat::access(Compat::PUBLIC))) {
                 $tags[] = $this->shortTag($fact->tag());
             }
         }
@@ -568,7 +567,7 @@ trait JsonBuilders
     {
         $element = Registry::elementFactory()->make('INDI:*:_ASSO:RELA');
         $element = $element instanceof RelationIsDescriptor ? $element : new RelationIsDescriptor('');
-        $values  = $element->values($sex) + $element->values('U');
+        $values  = $element->values(Compat::sexArgument($sex)) + $element->values(Compat::sexArgument('U'));
         $key     = mb_strtolower(trim($rela));
 
         return $values[$key] ?? ($role === 'other' ? $rela : $values[$role] ?? $rela);

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+API level 36, unchanged. **webtrees 2.3:** the module works with webtrees 2.3 as well as 2.2. webtrees 2.3 replaces
+numbers and strings by enums (access levels, sex), removes `I18N::comparator()` and `I18N::activeLocales()`, and moves
+request handlers to `Http\Controllers`; `src/Compat.php` hides these differences. A tree that the user may not see now
+answers `not-found` as JSON, as before, instead of an HTML error page from webtrees 2.3. **Fix:** the notes of a source
+that point to a note record came as the raw pointer instead of the note's text (missing import).
+
 ## 1.22.0 – 2026-10-14
 API level 36, unchanged. **webtrees mobile for Android** (Google Play), added by Andreas Scharf: the app is now listed
 for Android phones as well as for iPhone and iPad, with the Google Play badge. **The “App” and “Connect” pages name the
