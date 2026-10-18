@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")"
 ALT=$(realpath "$1")
-TAG=${2:-ed039c653d}
+TAG=${2:-d82c24b269}
 FALKENRATH=$(realpath ../../../../falkenrath)
 AUS=$(realpath ..)/.vergleich
 mkdir -p "$AUS"

@@ -5,7 +5,7 @@
 #   neu    alles loeschen und neu einrichten
 set -e
 cd "$(dirname "$0")"
-TAG=${2:-ed039c653d}
+TAG=${2:-d82c24b269}
 export WEBTREES7_IMAGE="webtrees7:$TAG" WEBTREES7_TAG="$TAG"
 ADRESSE=${ADRESSE:-http://$(hostname -I | awk '{print $1}'):8717}
 DC="docker compose -f instanz.yaml"

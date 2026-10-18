@@ -3,7 +3,7 @@
 # Aufruf: tests/docker/manifest.sh [Image-Tag]
 set -e
 cd "$(dirname "$0")"
-TAG=${1:-ed039c653d}
+TAG=${1:-d82c24b269}
 export WEBTREES7_IMAGE="webtrees7:$TAG" WEBTREES7_TAG="$TAG"
 
 docker compose down -v >/dev/null 2>&1 || true

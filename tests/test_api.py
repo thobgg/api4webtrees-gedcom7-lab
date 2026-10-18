@@ -1078,15 +1078,24 @@ class Schreiben(unittest.TestCase):
         geburt = zitat(source="laut Oma Quell", quality=1)
         self.assertEqual(fid, geburt["id"])
         q = geburt["sources"]
-        self.assertEqual([("S1", "Taufen 1850, Nr. 7", 3, "Zita, Tochter\ndes Quell", ["gut lesbar"]), ("", "", 1, "", [])],
+        # GEDCOM 7.0 kennt keine Text-Quellen: die API legt einen Quellen-Datensatz mit diesem Titel an
+        oma = q[1]["xref"] if umgebung.DOCKER else ""
+        self.assertEqual([("S1", "Taufen 1850, Nr. 7", 3, "Zita, Tochter\ndes Quell", ["gut lesbar"]), (oma, "", 1, "", [])],
                          [(x["xref"], x["page"], x["quality"], x["text"], x["notes"]) for x in q])
         self.assertEqual("laut Oma Quell", q[1]["title"])
+        if umgebung.DOCKER:
+            self.assertNotIn(oma, ("", "S1"))
+            # Derselbe Text noch einmal: dieselbe Quelle, kein zweiter Datensatz
+            a = s.post("Citation", "testbaum", {"source": "laut Oma Quell"}, xref=xref)
+            self.assertEqual(True, a.json["ok"], a)
+            self.assertEqual([oma], [f["sources"][0]["xref"] for f in self.fakten(s, xref) if f.get("tag") == "SOUR"])
+            self.assertEqual(True, s.post("DeleteFact", "testbaum", {"factId": a.json["factId"]}, xref=xref).json["ok"])
         # 3. nur die Seite aendern: Qualitaet, Datum, Zitat, Notiz bleiben
         q0 = zitat(index=0, page="Taufen 1850, Nr. 8")["sources"][0]
         self.assertEqual(("Taufen 1850, Nr. 8", 3, "3 MAY 1850", "Zita, Tochter\ndes Quell", ["gut lesbar"]),
                          (q0["page"], q0["quality"], q0["date"]["gedcom"], q0["text"], q0["notes"]))
         # 4. verschieben: die Text-Quelle nach vorn
-        self.assertEqual(["", "S1"], [x["xref"] for x in zitat(index=1, moveTo=0)["sources"]])
+        self.assertEqual([oma, "S1"], [x["xref"] for x in zitat(index=1, moveTo=0)["sources"]])
         # Ort und Datum des Ereignisses selbst sind unveraendert, DATA ist richtig aufgebaut
         ged = umgebung.sql("SELECT i_gedcom FROM wt_individuals WHERE i_id = ?", xref)[0][0]
         self.assertIn("2 DATE 1 MAY 1850\n2 PLAC Zitadorf", ged)

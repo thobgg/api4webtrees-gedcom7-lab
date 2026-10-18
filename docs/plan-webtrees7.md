@@ -211,6 +211,14 @@ Ergebnis: 1732 gegen 1734 Aufrufe, 55 Arten von Unterschieden.
 
 Sonst fehlt nichts, und nichts kommt doppelt.
 
+### Nachtrag (18.10.2026 abends)
+
+- **Text-Quellen, Entscheidung 3 neu = b:** Für webtrees7 hat der Nutzer entschieden, streng nach dem Leitfaden https://gedcom.io/migrate/ vorzugehen (Abschnitt „Non-pointer SOUR Substructures“): Aus einer Text-Quelle wird ein Quellen-Datensatz mit `TITL`. Die API macht es jetzt genauso (`textSource()`). Gibt es schon eine sichtbare Quelle mit genau diesem Titel, zeigt der Verweis auf sie. `SOUR @VOID@` wird weiter gelesen. Für Gäste gilt der Datenschutz für Quellen, so ist es gewollt.
+- **Keine Update-Prüfung** gegen `latest-version.txt` der Linie 1.x.
+- **Version 2.0.0** für die Linie webtrees7. 1.x bleibt die öffentliche Linie für GEDCOM 5.5.1/GEDCOM-L. Der Fork selbst heißt `2.3.0-webtrees7` (Schema wie bei Greg: Version + Kennzeichen) und prüft keine Updates.
+- **Image `d82c24b269`:** 64/64 grün, 0 Umwandlungen durch den Kern.
+- **App-Logik-Vergleich (Stufe 2):** Test `Webtrees7Vergleich` in app4webtrees, nur auf dem lokalen Branch `webtrees7-test`. Er schickt die gesammelten Antworten durch den Code der App (Personenblatt, Datumsfeld). Datumsfeld: 0 Unterschiede. Personenblatt: Die Reihenfolge der Fakten folgt der Sortierung von webtrees 2.3 (Geschlecht und Name zuerst), Text an `EMIG`/`IMMI` steht als Notiz-Zeile.
+
 ### P3 Orte und `_LOC`
 
 Dieser Schritt ist nach der Codemenge der größte.

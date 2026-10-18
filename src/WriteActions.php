@@ -17,6 +17,7 @@ use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\Contracts\UserInterface;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Registry;
+use Fisharebest\Webtrees\Source;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Services\MediaFileService;
 use Fisharebest\Webtrees\Services\PendingChangesService;
@@ -504,6 +505,7 @@ trait WriteActions
                 return $this->error(400, 'source-missing');
             }
 
+            $this->textSource($body, $tree);
             $new = $this->citationGedcom(1, '', $body);
             $record->createFact($new, true);
 
@@ -518,6 +520,7 @@ trait WriteActions
         }
 
         $gedcom = $old->gedcom();
+        $this->textSource($body, $tree);
 
         // Der allgemeine Verweis ist selbst das Ereignis ("1 SOUR @S1@ ...")
         if ($this->shortTag($old->tag()) === 'SOUR') {
@@ -593,6 +596,33 @@ trait WriteActions
         }
 
         return null;
+    }
+
+    /**
+     * Eine Quelle als Text ("laut Oma Quell") wird ein Quellen-Datensatz mit diesem Titel, wie beim Umwandeln von
+     * GEDCOM 5.5.1 nach 7.0 (https://gedcom.io/migrate/, SOUR ohne Verweis). Gibt es schon eine sichtbare Quelle mit
+     * genau diesem Titel, zeigt der Verweis auf sie.
+     *
+     * @param array<string,mixed> $body wird dabei veraendert
+     */
+    private function textSource(array &$body, Tree $tree): void
+    {
+        $title = GedcomText::line(str_replace("\n", ' ', $this->str($body, 'source')));
+
+        if (!array_key_exists('source', $body) || str_starts_with($title, '@')) {
+            return;
+        }
+
+        $source = DB::table('sources')
+            ->where('s_file', '=', $tree->id())
+            ->where('s_name', '=', $title)
+            ->pluck('s_id')
+            ->map(static fn (string $xref) => Registry::sourceFactory()->make($xref, $tree))
+            ->first(static fn ($source): bool => $source instanceof Source && $source->canShow() && !$source->isPendingDeletion());
+
+        $source ??= $tree->createRecord("0 @@ SOUR\n1 TITL " . $title);
+
+        $body['source'] = '@' . $source->xref() . '@';
     }
 
     /**
