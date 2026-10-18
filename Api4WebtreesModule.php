@@ -88,7 +88,6 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
     public const string DESCRIPTION = 'JSON-Schnittstelle für die Apps wtAnd, wtWin und wtTux – und jeden anderen Client. Liest und schreibt mit den Rechten des angemeldeten Benutzers.';
 
     // Eine Textdatei mit der neuesten Versionsnummer; webtrees zeigt damit in der Modulverwaltung einen Update-Hinweis.
-    private const string LATEST_VERSION_URL = 'https://raw.githubusercontent.com/thobgg/api4webtrees/main/latest-version.txt';
     private const string SUPPORT_URL        = 'https://github.com/thobgg/api4webtrees';
 
     // Koppeln: der Einmal-Code gilt so viele Sekunden und genau einmal. Gespeichert wird nur sein Hash.
@@ -250,9 +249,13 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
         return '1.22.0';
     }
 
+    /**
+     * Keine Update-Pruefung: latest-version.txt auf GitHub gehoert zur Linie 1.x fuer GEDCOM 5.5.1. Ein webtrees7 bekaeme
+     * sonst das Modul fuer 5.5.1 als Update angeboten.
+     */
     public function customModuleLatestVersionUrl(): string
     {
-        return self::LATEST_VERSION_URL;
+        return '';
     }
 
     public function customModuleSupportUrl(): string
