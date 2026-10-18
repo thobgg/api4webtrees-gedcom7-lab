@@ -788,7 +788,9 @@ trait JsonBuilders
     {
         $value = $fact->value();
 
-        if ($value === '') {
+        // "1 EMIG Y": das Ereignis fand statt, ohne weitere Angabe. In GEDCOM 7.0 steht bei EMIG, IMMI ... nur noch Y, ein
+        // Text kommt in eine Notiz - die Apps zeigten Y nie als Wert.
+        if ($value === '' || $value === 'Y') {
             return '';
         }
 

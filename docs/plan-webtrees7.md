@@ -190,6 +190,27 @@ Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt.
 
 **P5 Doku:** `tests/docker/manifest.sh` erzeugt `API.md` und `openapi.json` aus Antworten von webtrees7. `Tags` bleibt unverändert, weil die App mit `SNOTE` oder `NO` aus der Tag-Liste nichts anfangen könnte (kommt mit P6).
 
+### Vorher-nachher-Vergleich (18.10.2026)
+
+`tests/docker/vergleich.sh <altes Modul>` fragt Falkenrath (492 Personen) zweimal ab, als Admin und als Gast:
+- **vorher:** webtrees 2.2.6 mit Modul 1.22.0 (SQLite);
+- **nachher:** webtrees7 `ed039c653d` mit diesem Modul.
+
+Abgefragt werden alle Leserouten. Kennungen, Sitzung, Adressen und Versionen fallen aus dem Vergleich heraus.
+
+Ergebnis: 1732 gegen 1734 Aufrufe, 55 Arten von Unterschieden.
+
+| Unterschied | Anzahl | Bewertung |
+|---|---|---|
+| neue Felder `gedcomTag`, `date.gedcom7` | ~13.000 | additiv, Stufe 37 |
+| `format` `jpg` → `image/jpeg` | 451 | harmlos: die App zeigt `IMAGE/JPEG`, entscheidet aber über `mime` |
+| `rela` „Godmother“/„Godparent“ → klein | 16 | erwartet (7.0 vereinheitlicht), `role` und `label` gleich |
+| Text-Quelle ohne Datensatz → Quelle `_S7_1` | 1 (Quellenliste +1) | erwartet: webtrees7 legt beim Einlesen den Datensatz an |
+| `EMIG`/`IMMI` mit Text: Text jetzt als Notiz, Wert leer | 4 | erwartet: 7.0 erlaubt dort nur `Y`. Die API zeigt `Y` wie früher als leeren Wert. |
+| Gast sieht die Text-Quelle von I65 nicht mehr | 1 | Folge des Einlesens: Als Datensatz gilt für sie der Datenschutz für Quellen (Gäste sehen hier keine), als Text-Quelle war sie sichtbar. Frage an webtrees7, nicht an das Modul. |
+
+Sonst fehlt nichts, und nichts kommt doppelt.
+
 ### P3 Orte und `_LOC`
 
 Dieser Schritt ist nach der Codemenge der größte.

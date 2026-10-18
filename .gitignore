@@ -8,3 +8,4 @@ tmp/
 tests/.work/
 tests/.cache/
 tests/__pycache__/
+tests/.vergleich/

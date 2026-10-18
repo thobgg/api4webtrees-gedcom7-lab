@@ -25,8 +25,9 @@ import urllib.request
 import zipfile
 
 HIER = os.path.dirname(os.path.abspath(__file__))
-MODUL = os.path.dirname(HIER)
-ARBEIT = os.path.join(HIER, ".work")
+# MODUL_DIR: ein anderer Stand des Moduls (tests/vergleich.py: das alte Modul gegen webtrees 2.2.6)
+MODUL = os.environ.get("MODUL_DIR") or os.path.dirname(HIER)
+ARBEIT = os.environ.get("UMGEBUNG_ARBEIT") or os.path.join(HIER, ".work")
 WT = os.path.join(ARBEIT, "webtrees")
 PHP = os.environ.get("PHP", "php")
 DOCKER = os.environ.get("WEBTREES_DOCKER") == "1"
@@ -63,7 +64,7 @@ def _zip():
     if eigene:
         return eigene
     fassung = os.environ.get("WEBTREES", "2.2.6")
-    ziel = os.path.join(HIER, ".cache", f"webtrees-{fassung}.zip")
+    ziel = os.path.join(os.environ.get("UMGEBUNG_ARBEIT") and ARBEIT + "-cache" or os.path.join(HIER, ".cache"), f"webtrees-{fassung}.zip")
     os.makedirs(os.path.dirname(ziel), exist_ok=True)
     if not os.path.isfile(ziel):
         url = f"https://github.com/fisharebest/webtrees/releases/download/{fassung}/webtrees-{fassung}.zip"

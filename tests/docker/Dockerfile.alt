@@ -1,0 +1,5 @@
+# webtrees 2.2.6 wie bei den Nutzern heute: PHP 8.3 mit Python fuer tests/vergleich.py (php -S, SQLite)
+FROM php:8.3-cli
+COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions intl gd zip exif \
+    && apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*

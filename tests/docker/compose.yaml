@@ -10,6 +10,7 @@ services:
     image: api4webtrees7-test:${WEBTREES7_TAG:-ed039c653d}
     volumes:
       - ../..:/var/www/html/modules_v4/api4webtrees:ro
+      - ${FALKENRATH_DIR:-../../../../falkenrath}:/falkenrath:ro
     tmpfs:
       - /var/www/html/data
     environment:
