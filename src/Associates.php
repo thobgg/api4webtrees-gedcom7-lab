@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Api4Webtrees;
 
 use Fisharebest\Webtrees\Gedcom7\Gedcom7Associates;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Converter;
 
 use function in_array;
 use function mb_strtolower;
 use function preg_match;
+use function preg_replace;
 use function strcasecmp;
 use function strtolower;
+use function strtoupper;
+use function strtr;
 use function trim;
 
 /**
@@ -80,6 +84,36 @@ final class Associates
         $rela = Gedcom7Associates::relationship($value, $phrase) ?? (string) $phrase;
 
         return [$rela === '' ? strtolower($value) : $rela, self::ROLES[$value] ?? self::role($rela)];
+    }
+
+    /**
+     * Eine Bezugsperson als GEDCOM 7.0: "<level> ASSO @xref@" (ohne Datensatz: @VOID@ mit PHRASE), darunter ROLE
+     * (+ PHRASE) fuer die RELA, wie webtrees sie kennt (godmother -> GODP + Godmother, Gevatter -> OTHER + Gevatter).
+     * $sub sind weitere Unterzeilen (NOTE, SOUR ...) eine Ebene tiefer.
+     */
+    public static function gedcom(string|null $xref, string $phrase, string $rela, string $sub, int $level): string
+    {
+        $key = strtoupper(strtr(trim($rela), [' ' => '_']));
+
+        [$role, $role_phrase] = match (true) {
+            isset(Gedcom7Converter::ROLES[$key])             => [Gedcom7Converter::ROLES[$key], ''],
+            isset(Gedcom7Converter::ROLES_WITH_PHRASE[$key]) => [Gedcom7Converter::ROLES_WITH_PHRASE[$key], Gedcom7Converter::humanize($key)],
+            default                                          => ['OTHER', trim($rela)],
+        };
+
+        return "\n" . $level . ' ASSO @' . ($xref ?? 'VOID') . '@'
+            . ($xref === null ? "\n" . ($level + 1) . ' PHRASE ' . $phrase : '')
+            . "\n" . ($level + 1) . ' ROLE ' . $role
+            . ($role_phrase === '' ? '' : "\n" . ($level + 2) . ' PHRASE ' . $role_phrase)
+            . $sub;
+    }
+
+    /**
+     * Die Unterzeilen einer Bezugsperson ohne ihre Rolle (ROLE + PHRASE, RELA) und ohne die PHRASE von @VOID@.
+     */
+    public static function withoutRole(string $sub, int $level): string
+    {
+        return (string) preg_replace('/\n' . $level . ' (ROLE|RELA|PHRASE)( [^\n]*)?(\n[' . ($level + 1) . '-9] [^\n]*)*/', '', $sub);
     }
 
     /**

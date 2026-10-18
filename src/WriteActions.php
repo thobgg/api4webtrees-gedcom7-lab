@@ -161,13 +161,14 @@ trait WriteActions
     /**
      * Paten, Trauzeugen und andere Beteiligte eines Ereignisses schreiben (ab Stufe 20): ?xref=I123 bzw. ?xref=F12
      * Rumpf: { factId, linked?: [{ xref, role, rela?, note? }], free?: [{ text, role }], convertLevel1? }
-     * - linked ersetzt die Liste der verknuepften Personen ("2 _ASSO @I…@" + "3 RELA") in dieser Reihenfolge. role:
-     *   godparent oder witness (RELA wird so geschrieben, klein, wie webtrees selbst), other mit rela als freiem Text.
-     *   Stand die Person schon am Ereignis, bleiben ihre weiteren Unterzeilen (3 SOUR ...) und - wenn sie zur Rolle
-     *   passt - die bisherige Schreibweise von RELA ("Godfather"); note ersetzt nur die eingebettete Notiz, wenn genannt.
-     *   Verknuepfungen zu Personen, die der Schreibende nicht einmal als Verweis sehen darf, bleiben immer stehen.
-     * - free ersetzt die Personen ohne Datensatz: "2 _GODP <Text>" (Paten) und "2 _WITN <Text>" (Zeugen), je Person
-     *   eine Zeile (GEDCOM-L); alte Notizen "Paten: …"/"Trauzeugen: …" am Ereignis gehen dabei in diese Form ueber.
+     * - linked ersetzt die Liste der verknuepften Personen ("2 ASSO @I…@" + "3 ROLE") in dieser Reihenfolge. role:
+     *   godparent (ROLE GODP) oder witness (ROLE WITN), other mit rela als freiem Text (ROLE OTHER + PHRASE, bekannte
+     *   Werte wie friend als ROLE FRIEND). Stand die Person schon am Ereignis, bleiben ihre weiteren Unterzeilen
+     *   (3 SOUR ...) und - wenn sie zur Rolle passt - die genauere Rolle (godmother: ROLE GODP + PHRASE Godmother); note
+     *   ersetzt nur die eingebettete Notiz, wenn genannt. Verknuepfungen zu Personen, die der Schreibende nicht einmal als
+     *   Verweis sehen darf, bleiben immer stehen.
+     * - free ersetzt die Personen ohne Datensatz: "2 ASSO @VOID@" + "3 PHRASE <Text>" + "3 ROLE GODP" bzw. "WITN", je
+     *   Person eine; aeltere "2 _GODP"/"2 _WITN" und Notizen "Paten: …"/"Trauzeugen: …" gehen dabei in diese Form ueber.
      * - convertLevel1: true verschiebt "1 ASSO" der Person, die in linked stehen, in die Taufe (nur CHR/BAPM einer Person);
      *   ihre Unterzeilen (Notiz, Quelle) kommen mit.
      * Nicht genannte Teile (linked oder free) bleiben, wie sie sind. Antwort: factId (die neue Kennung des Ereignisses).
@@ -249,7 +250,7 @@ trait WriteActions
 
     /**
      * Die "1 ASSO" einer Person, die convertLevel1 in die Taufe holen darf: xref => [Fakt-ID, Unterzeilen um eine
-     * Ebene tiefer gerueckt, ohne RELA]. Nur bearbeitbare, je Person der erste.
+     * Ebene tiefer gerueckt, ohne Rolle]. Nur bearbeitbare, je Person der erste.
      *
      * @return array<string,array{0:string,1:string}>
      */
@@ -260,7 +261,7 @@ trait WriteActions
         foreach ($individual->facts(['ASSO'], false, null, true) as $fact) {
             if (preg_match('/^1 ASSO @([^@]+)@((?:\n[2-9] [^\n]*)*)$/', $fact->gedcom(), $m) === 1 && $fact->canEdit()) {
                 $sub = (string) preg_replace_callback('/\n([2-8]) /', static fn (array $x): string => "\n" . ((int) $x[1] + 1) . ' ', $m[2]);
-                $level1[$m[1]] ??= [$fact->id(), (string) preg_replace('/\n3 RELA [^\n]*/', '', $sub)];
+                $level1[$m[1]] ??= [$fact->id(), Associates::withoutRole($sub, 3)];
             }
         }
 
@@ -268,7 +269,7 @@ trait WriteActions
     }
 
     /**
-     * Die verknuepften Beteiligten eines Ereignisses ("2 _ASSO @I…@" + "3 RELA") durch die Liste aus dem Rumpf
+     * Die verknuepften Beteiligten eines Ereignisses ("2 ASSO @I…@" + "3 ROLE") durch die Liste aus dem Rumpf
      * ersetzen - Regeln siehe postAssociationAction, linked. Liefert die neuen Bloecke und die Fakt-IDs der "1 ASSO",
      * die dabei in das Ereignis gewandert sind, oder die Fehlerantwort.
      *
@@ -284,7 +285,7 @@ trait WriteActions
         $existing = [];
 
         foreach ($blocks as $i => $block) {
-            if (preg_match('/^\n2 _ASSO @([^@]+)@/', $block, $m) === 1) {
+            if (preg_match('/^\n2 _?ASSO @([^@]+)@/', $block, $m) === 1 && $m[1] !== 'VOID') {
                 $existing[] = [$i, $m[1], $block];
             }
         }
@@ -322,7 +323,8 @@ trait WriteActions
             foreach ($existing as $n => [, $x, $block]) {
                 if ($x === $xref && !isset($used[$n])) {
                     $used[$n] = true;
-                    $sub      = (string) preg_replace('/^\n2 _ASSO [^\n]*/', '', $block);
+                    $sub           = (string) preg_replace('/^\n2 _?ASSO [^\n]*/', '', $block);
+                    $existing_rela = Associates::fromBlock($block, 2)[0]['rela'] ?? '';
                     break;
                 }
             }
@@ -332,11 +334,7 @@ trait WriteActions
                 $sub          = $level1[$xref][1];
             }
 
-            if (preg_match('/\n3 RELA ([^\n]*)/', $sub, $m) === 1) {
-                $existing_rela = trim($m[1]);
-            }
-
-            $sub  = (string) preg_replace('/\n3 RELA [^\n]*/', '', $sub);
+            $sub  = Associates::withoutRole($sub, 3);
             $rela = match ($role) {
                 'godparent', 'witness' => $existing_rela !== '' && Associates::role($existing_rela) === $role ? $existing_rela : $role,
                 default => $rela,
@@ -348,7 +346,7 @@ trait WriteActions
                 $sub  = ($text === '' ? '' : "\n3 NOTE " . $text) . $sub;
             }
 
-            $new[] = "\n2 _ASSO @" . $xref . "@\n3 RELA " . $rela . $sub;
+            $new[] = Associates::gedcom($xref, '', $rela, $sub, 2);
         }
 
         // Verweise, die der Schreibende nicht sehen darf, bleiben stehen - die App kennt sie gar nicht
@@ -366,7 +364,8 @@ trait WriteActions
     }
 
     /**
-     * Die freien Beteiligten ("2 _GODP <Text>", "2 _WITN <Text>" und alte Notizen "Paten: …") durch die Liste aus dem
+     * Die freien Beteiligten ("2 ASSO @VOID@" mit PHRASE und ROLE GODP/WITN, aeltere "2 _GODP <Text>", "2 _WITN <Text>"
+     * und alte Notizen "Paten: …") durch die Liste aus dem
      * Rumpf ersetzen - Regeln siehe postAssociationAction, free. Liefert die neuen Bloecke oder die Fehlerantwort.
      *
      * @param list<mixed>  $free   Eintraege { text, role } oder nur der Text
@@ -391,7 +390,7 @@ trait WriteActions
             }
 
             if ($text !== '') {
-                $new[] = "\n2 " . ($role === 'godparent' ? '_GODP' : '_WITN') . ' ' . $text;
+                $new[] = Associates::gedcom(null, $text, $role, '', 2);
             }
         }
 
@@ -405,7 +404,9 @@ trait WriteActions
                     2,
                 ))) === 1;
 
-            if (preg_match('/^\n2 (_GODP|_WITN)( |$)/', $block) === 1 || $free_note) {
+            $void = preg_match('/^\n2 ASSO @VOID@/', $block) === 1 && in_array(Associates::fromBlock($block, 2)[0]['role'] ?? '', ['godparent', 'witness'], true);
+
+            if (preg_match('/^\n2 (_GODP|_WITN)( |$)/', $block) === 1 || $free_note || $void) {
                 $remove[] = $i;
             }
         }
@@ -424,7 +425,7 @@ trait WriteActions
     private function associatesPosition(array $blocks): int
     {
         foreach ($blocks as $i => $block) {
-            if (preg_match('/^\n2 (NOTE|SOUR|OBJE|RESN)( |$|\n)/', $block) === 1) {
+            if (preg_match('/^\n2 (NOTE|SNOTE|SOUR|OBJE|RESN)( |$|\n)/', $block) === 1) {
                 return $i;
             }
         }
@@ -1241,7 +1242,8 @@ trait WriteActions
 
         // Art der Datei (ab Stufe 18 waehlbar): "document" fuer Scans von Urkunden und Kirchenbuchseiten, sonst "photo".
         $type   = in_array($this->str($body, 'type'), self::MEDIA_TYPES, true) ? $this->str($body, 'type') : 'photo';
-        $gedcom = "0 @@ OBJE\n" . Registry::container()->get(MediaFileService::class)->createMediaFileGedcom($file, $type, $title, $note);
+        [$medium, $phrase] = Medium::gedcom7($type);
+        $gedcom = "0 @@ OBJE\n" . Registry::container()->get(MediaFileService::class)->createMediaFileGedcom($file, $medium, $title, $note, $tree, $phrase);
         $media  = $tree->createMediaObject($gedcom);
 
         // Wie webtrees selbst: das Medienobjekt sofort annehmen, damit Dateisystem und Baum zusammenpassen.
@@ -1259,7 +1261,7 @@ trait WriteActions
 
     /**
      * Titel und Art eines Medienobjekts aendern (ab Stufe 23): ?xref=M1, Rumpf { title?, type? }. Betrifft die erste
-     * Datei (1 FILE / 2 TITL, 2 FORM / 3 TYPE); alles andere am Medienobjekt bleibt.
+     * Datei (1 FILE / 2 TITL, 2 FORM / 3 MEDI); alles andere am Medienobjekt bleibt.
      */
     public function postMediaObjectAction(ServerRequestInterface $request): ResponseInterface
     {
@@ -1287,13 +1289,10 @@ trait WriteActions
                 $sub = ($title === '' ? '' : "\n2 TITL " . $title) . $sub;
             }
             if (array_key_exists('type', $body)) {
-                $type   = $this->str($body, 'type');
-                $sub = (string) preg_replace('/\n3 TYPE[^\n]*/', '', $sub);
-                if ($type !== '') {
-                    $sub = preg_match('/\n2 FORM[^\n]*/', $sub) === 1
-                        ? (string) preg_replace('/(\n2 FORM[^\n]*)/', '$1' . "\n3 TYPE " . $type, $sub, 1)
-                        : $sub . "\n2 FORM\n3 TYPE " . $type;
-                }
+                $type = $this->str($body, 'type');
+                $sub  = (string) preg_replace('/\n3 (TYPE|MEDI)[^\n]*(\n[4-9] [^\n]*)*/', '', $sub);
+                // GEDCOM 7.0: FORM (der Medientyp) gibt es immer, MEDI steht darunter
+                $sub = (string) preg_replace('/(\n2 FORM[^\n]*)/', '$1' . Medium::lines($type, 3), $sub, 1);
             }
 
             return $m[1] . $sub;
@@ -1340,7 +1339,8 @@ trait WriteActions
 
         $title = Registry::elementFactory()->make('OBJE:FILE:TITL')->canonical($this->str($body, 'title'));
         $type  = in_array($this->str($body, 'type'), self::MEDIA_TYPES, true) ? $this->str($body, 'type') : 'document';
-        $media = $tree->createMediaObject("0 @@ OBJE\n" . Registry::container()->get(MediaFileService::class)->createMediaFileGedcom($file, $type, $title, ''));
+        [$medium, $phrase] = Medium::gedcom7($type);
+        $media = $tree->createMediaObject("0 @@ OBJE\n" . Registry::container()->get(MediaFileService::class)->createMediaFileGedcom($file, $medium, $title, '', $tree, $phrase));
         // Wie beim Hochladen: sofort annehmen, damit Datei und Baum zusammenpassen
         Registry::container()->get(PendingChangesService::class)->acceptRecord($media);
 

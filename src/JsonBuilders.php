@@ -35,7 +35,6 @@ use function implode;
 use function html_entity_decode;
 use function in_array;
 use function mb_strtolower;
-use function strtolower;
 use function preg_match;
 use function preg_replace;
 use function str_replace;
@@ -280,7 +279,7 @@ trait JsonBuilders
      * Ereignisse und Attribute eines Datensatzes. facts() filtert bereits nach Zugriffsrechten.
      *
      * Ab Stufe 19 je Fakt zusaetzlich: typeLabel (TYPE uebersetzt), noteKinds (parallel zu notes), associates
-     * (2 _ASSO: Paten, Trauzeugen ...) und freeAssociates (aus Notizen "Paten: ..."). Alles additiv.
+     * (2 ASSO: Paten, Trauzeugen ...) und freeAssociates (ASSO @VOID@, Notizen "Paten: ..."). Alles additiv.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -631,13 +630,7 @@ trait JsonBuilders
 
     private function mediumJson(MediaFile $media_file): string|null
     {
-        [$medium, $phrase] = $media_file->medium();
-
-        if ($medium === 'OTHER' && $phrase !== '') {
-            return mb_strtolower($phrase);
-        }
-
-        return $medium === '' ? null : strtolower($medium);
+        return Medium::api(...$media_file->medium());
     }
 
     /**
