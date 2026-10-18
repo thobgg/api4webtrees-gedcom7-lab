@@ -97,7 +97,7 @@ trait ReadActions
             $trees[] = [
                 'name'        => $tree->name(),
                 'title'       => $tree->title(),
-                // Ab Stufe 37: wie der Baum gespeichert ist. webtrees7 wandelt 5.5.1-Baeume um; bis dahin sind sie nur lesbar.
+                // Ab Stufe 38: wie der Baum gespeichert ist. webtrees7 wandelt 5.5.1-Baeume um; bis dahin sind sie nur lesbar.
                 'gedcom'      => Gedcom7Storage::isGedcom7Tree($tree) ? '7.0' : '5.5.1',
                 'individuals' => DB::table('individuals')->where('i_file', '=', $tree->id())->count(),
                 'role'        => $this->role($tree, $user),
@@ -123,7 +123,7 @@ trait ReadActions
             'api'         => self::API_VERSION,
             'module'      => $this->customModuleVersion(),
             'webtrees'    => Webtrees::VERSION,
-            // Ab Stufe 37: webtrees7 speichert GEDCOM 7.0 (rohe Felder wie date.gedcom7, gedcomTag tragen 7.0)
+            // Ab Stufe 38: webtrees7 speichert GEDCOM 7.0 (rohe Felder wie date.gedcom7, gedcomTag tragen 7.0)
             'gedcom'      => '7.0',
             'baseUrl'     => Validator::attributes($request)->string('base_url'),
             'rewriteUrls' => Validator::attributes($request)->boolean('rewrite_urls', false),

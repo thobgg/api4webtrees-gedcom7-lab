@@ -1,11 +1,12 @@
 # Changelog
 
 ## Unreleased
-API level 36, unchanged. **webtrees 2.3:** the module works with webtrees 2.3 as well as 2.2. webtrees 2.3 replaces
-numbers and strings by enums (access levels, sex), removes `I18N::comparator()` and `I18N::activeLocales()`, and moves
-request handlers to `Http\Controllers`; `src/Compat.php` hides these differences. A tree that the user may not see now
-answers `not-found` as JSON, as before, instead of an HTML error page from webtrees 2.3. **Fix:** the notes of a source
-that point to a note record came as the raw pointer instead of the note's text (missing import).
+API level 38. **For webtrees7, which stores GEDCOM 7.0** (version 2.0.0, separate from 1.x for webtrees 2.2/2.3 and
+GEDCOM 5.5.1). Level 37 as in 1.x: `details` at every fact, unknown names as `…`. Level 38: `gedcom` in `Info` and per
+tree; the module writes GEDCOM 7.0 itself (associates as `ASSO`/`ROLE`, text sources as source records, dates, media
+types); `date.gedcom` stays in GEDCOM 5.5.1 form for the apps, `date.gedcom7` and `date.phrase` are new; shared notes
+come as `NOTE` with `noteXref`, `gedcomTag` is the stored tag; raw GEDCOM 5.5.1 in `POST Fact` is converted
+(`converted: true`); no update check against 1.x.
 
 ## 1.22.0 – 2026-10-14
 API level 36, unchanged. **webtrees mobile for Android** (Google Play), added by Andreas Scharf: the app is now listed

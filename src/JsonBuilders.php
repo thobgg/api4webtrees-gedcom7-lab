@@ -13,6 +13,7 @@ use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Gedcom7\Gedcom7Converter;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\GedcomRecord;
+use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Media;
 use Fisharebest\Webtrees\MediaFile;
@@ -27,9 +28,11 @@ use Fisharebest\Webtrees\Services\LinkedRecordService;
 use Fisharebest\Webtrees\Tree;
 use Illuminate\Support\Collection;
 
+use function array_key_last;
 use function array_keys;
 use function array_map;
 use function array_pad;
+use function array_slice;
 use function explode;
 use function implode;
 use function html_entity_decode;
@@ -41,6 +44,7 @@ use function str_replace;
 use function str_contains;
 use function strip_tags;
 use function strrpos;
+use function strtr;
 use function substr;
 use function trim;
 use function usort;
@@ -55,6 +59,12 @@ use const ENT_QUOTES;
  */
 trait JsonBuilders
 {
+    // Unterangaben eines Fakts mit eigenem Feld im JSON - sie stehen nicht noch einmal in details
+    private const array DETAIL_FIELDS = [
+        'DATE', 'PLAC', 'TYPE', 'ADDR', 'NOTE', 'SNOTE', 'SOUR', 'OBJE', 'ASSO', '_ASSO', '_GODP', '_WITN', 'RESN',
+        'GIVN', 'SURN', 'NPFX', 'SPFX', 'NSFX', 'NICK', '_RUFNAME',
+    ];
+
     /**
      * Das Geschlecht (M, F, X oder U), wie der Benutzer es in den Fakten sieht (ab Stufe 28). webtrees' sex() nimmt den
      * ersten "1 SEX" - bei einer ausstehenden Aenderung ist das noch der freigegebene Wert, waehrend facts() dem
@@ -113,7 +123,8 @@ trait JsonBuilders
         $summary = [
             'xref'       => $individual->xref(),
             'name'       => $this->recordName($individual),
-            'sortName'   => $individual->sortName(),
+            // webtrees sortiert unbekannte Namen als "@N.N., @P.N."; angezeigt werden sie wie in webtrees als "…"
+            'sortName'   => strtr($individual->sortName(), ['@N.N.' => I18N::translateContext('Unknown surname', '…'), '@P.N.' => I18N::translateContext('Unknown given name', '…')]),
             'given'      => $individual->canShowName() ? $given : '',
             'surname'    => $individual->canShowName() ? $surname : '',
             'sex'        => $this->sexCode($individual),
@@ -306,7 +317,7 @@ trait JsonBuilders
                 // Aenderungen zeigt (Bearbeiter, Moderatoren); fuer alle anderen immer false.
                 'pending'        => $fact->isPendingAddition(),
                 // Ein Verweis auf eine gemeinsame Notiz heisst in GEDCOM 7.0 "1 SNOTE @N1@"; die Apps kennen ihn als NOTE
-                // (mit noteXref). gedcomTag (ab Stufe 37) ist das Tag, wie es gespeichert ist.
+                // (mit noteXref). gedcomTag (ab Stufe 38) ist das Tag, wie es gespeichert ist.
                 'tag'            => $tag === 'SNOTE' ? 'NOTE' : $tag,
                 'gedcomTag'      => $tag,
                 'label'          => $this->factLabel($fact),
@@ -337,6 +348,8 @@ trait JsonBuilders
                 // Ab Stufe 23: eine Notiz, die auf einen Notiz-Datensatz zeigt (1 SNOTE @N1@) - Clients aendern sie dann
                 // nicht als Text, sonst ginge die Verknuepfung verloren.
                 'noteXref'       => in_array($tag, ['NOTE', 'SNOTE'], true) && preg_match('/^@([^@]+)@$/', $fact->value(), $nx) === 1 ? $nx[1] : null,
+                // Ab Stufe 37: alle uebrigen Angaben des Fakts als Zeilen zum Anzeigen (Alter, Telefon, Abstammung ...)
+                'details'        => $this->factDetails($fact, $tree),
             ];
         }
 
@@ -733,7 +746,7 @@ trait JsonBuilders
         // Bei Ereignissen zusaetzlich das Datum im GEDCOM-Format ("ABT 1850", "9 NOV 1957") - damit ein Client es
         // zum Bearbeiten vorbelegen kann, ohne die Anzeige ("um 1850") zurueckuebersetzen zu muessen. gedcom wie in
         // GEDCOM 5.5.1 ("@#DJULIAN@ 1700", "INT 1850 (zu Ostern)"), so verstehen es die Apps und schicken es zurueck;
-        // ab Stufe 37 gedcom7 und phrase, wie es gespeichert ist ("JULIAN 1700", "1850" + "zu Ostern").
+        // ab Stufe 38 gedcom7 und phrase, wie es gespeichert ist ("JULIAN 1700", "1850" + "zu Ostern").
         if ($gedcom !== '' || $phrase !== '') {
             $json['gedcom']  = GedcomText::date551($gedcom, $phrase);
             $json['gedcom7'] = $gedcom;
@@ -792,6 +805,11 @@ trait JsonBuilders
         // Text kommt in eine Notiz - die Apps zeigten Y nie als Wert.
         if ($value === '' || $value === 'Y') {
             return '';
+        }
+
+        // "1 ASSO @VOID@" + "2 PHRASE Mr Stockdale" (ALIA, ANCI ... ebenso): eine Person ohne Datensatz heisst wie die Phrase
+        if ($value === '@VOID@' && preg_match('/\n2 PHRASE ([^\n]+)/', $fact->gedcom(), $phrase) === 1) {
+            return trim($phrase[1]);
         }
 
         // Mit Zeilen: Notizen und andere Texte ueber mehrere Zeilen (CONT) behalten ihre Umbrueche.
@@ -1130,6 +1148,57 @@ trait JsonBuilders
      * Wie plain(), aber Zeilenumbrueche und Absaetze bleiben erhalten. webtrees liefert mehrzeilige Texte als HTML
      * (<br>, <p>); ohne diesen Schritt klebten die Zeilen aneinander ("seines Vaters.In der Familie ...").
      */
+    /**
+     * Die Unterangaben eines Fakts, die kein eigenes Feld haben, als Zeilen: Bezeichnung und Wert, wie webtrees sie
+     * anzeigt, in der Sprache der Anfrage; level 0 steht direkt unter dem Fakt. So zeigt ein Client jede Angabe, auch
+     * eine, die er nicht kennt, ohne das GEDCOM zu lesen.
+     *
+     * @return list<array{tag:string,label:string,value:string,level:int}>
+     */
+    private function factDetails(Fact $fact, Tree $tree): array
+    {
+        // Fortsetzungszeilen an ihren Wert haengen
+        $lines = [];
+        foreach (array_slice(explode("\n", $fact->gedcom()), 1) as $line) {
+            if (preg_match('/^(\d) (CONT|CONC)(?: (.*))?$/', $line, $c) === 1 && $lines !== []) {
+                $lines[array_key_last($lines)][2] .= ($c[2] === 'CONT' ? "\n" : '') . ($c[3] ?? '');
+            } elseif (preg_match('/^(\d) (\S+)(?: (.*))?$/', $line, $m) === 1) {
+                $lines[] = [(int) $m[1], $m[2], $m[3] ?? ''];
+            }
+        }
+
+        $rows  = [];
+        $stack = explode(':', $fact->tag());
+        $skip  = null;
+
+        foreach ($lines as [$level, $tag, $value]) {
+            if ($skip !== null && $level > $skip) {
+                continue;
+            }
+
+            $skip  = null;
+            $stack = [...array_slice($stack, 0, $level), $tag];
+
+            // Die PHRASE einer Person ohne Datensatz ist schon ihr Wert (factValue)
+            $void_phrase = $level === 2 && $tag === 'PHRASE' && $fact->value() === '@VOID@';
+
+            if ($level === 2 && in_array($tag, self::DETAIL_FIELDS, true) || $tag === 'CHAN' || $void_phrase) {
+                $skip = $level;
+                continue;
+            }
+
+            $element = Registry::elementFactory()->make(implode(':', $stack));
+            $rows[]  = [
+                'tag'   => $tag,
+                'label' => $this->plain($element->label()),
+                'value' => $value === '' ? '' : $this->plainLines($element->value($value, $tree)),
+                'level' => $level - 2,
+            ];
+        }
+
+        return $rows;
+    }
+
     private function plainLines(string $html): string
     {
         $html  = (string) preg_replace('/<br\s*\/?>/i', "\n", $html);

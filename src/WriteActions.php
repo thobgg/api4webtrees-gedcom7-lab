@@ -151,7 +151,7 @@ trait WriteActions
             $gedcom = $this->withLocPointers($tree, $gedcom);
         }
 
-        // Ab Stufe 37: gespeichert, aber nach GEDCOM 7.0 unvollstaendig. EVEN und FACT ohne Art bekommen wie in
+        // Ab Stufe 38: gespeichert, aber nach GEDCOM 7.0 unvollstaendig. EVEN und FACT ohne Art bekommen wie in
         // webtrees7 ein leeres "2 TYPE".
         $warnings = GedcomText::factGedcomWarnings($gedcom);
 
@@ -165,7 +165,7 @@ trait WriteActions
             $record->updateFact($fact_id, $gedcom, true);
         }
 
-        // Ab Stufe 37: converted = das rohe GEDCOM war 5.5.1 und ist als 7.0 gespeichert
+        // Ab Stufe 38: converted = das rohe GEDCOM war 5.5.1 und ist als 7.0 gespeichert
         return $this->written($record, ($warnings === [] ? [] : ['warnings' => $warnings]) + ($converted ? ['converted' => true] : []));
     }
 
@@ -1538,7 +1538,7 @@ trait WriteActions
             return [$gedcom, $problem, false];
         }
 
-        // Ab Stufe 37: GEDCOM 5.5.1 wird hier umgewandelt, nicht erst im Kern
+        // Ab Stufe 38: GEDCOM 5.5.1 wird hier umgewandelt, nicht erst im Kern
         $gedcom7 = GedcomText::factToGedcom7($record_type, $gedcom);
 
         return $gedcom7 === null ? [$gedcom, 'gedcom551-not-convertible', false] : [$gedcom7[0], GedcomText::factGedcomProblem($gedcom7[0]), $gedcom7[1]];
