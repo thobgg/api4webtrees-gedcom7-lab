@@ -13,6 +13,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import re
 import shutil
 import socket
 import sqlite3
@@ -105,6 +106,7 @@ def sql(anweisung, *werte):
     if DOCKER:
         import pymysql
         anweisung = anweisung.replace("INSERT OR REPLACE", "REPLACE").replace("?", "%s")
+        anweisung = re.sub(r"ON CONFLICT \([^)]*\) DO UPDATE SET", "ON DUPLICATE KEY UPDATE", anweisung)
         con = pymysql.connect(host="db", user="webtrees", password="webtrees", database="webtrees", charset="utf8mb4")
         try:
             with con.cursor() as cur:

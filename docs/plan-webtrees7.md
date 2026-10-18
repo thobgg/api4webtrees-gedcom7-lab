@@ -102,6 +102,31 @@ Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt.
 - `@@` entschlüsseln; `@VOID@` bei `HUSB`, `WIFE` und `SOUR` berücksichtigen.
 - `date.gedcom` ist der 7.0-Rohwert, neu ist `date.phrase`.
 
+### Ergebnis P1 (18.10.2026, gegen ed039c653d)
+
+57 von 62 Tests grün. Rot sind nur noch Schreiben (P2: Paten, Trauzeugen und ein Folgefehler bei den Quellen) und P4 (Rundlauf GEDCOM-L, `CREA` beim Zusammenführen).
+
+**Umgesetzt**
+- `src/Associates.php` liest Bezugspersonen an einer Stelle:
+  - `ASSO` + `ROLE` (+ `PHRASE`), dazu `@VOID@`;
+  - als Rückfall das alte `_ASSO` + `RELA`.
+- `rela` liefert weiter webtrees-Werte (`godparent`, `godmother`, `friend`), über `Gedcom7Associates::relationship()`.
+- `ASSO @VOID@` mit Phrase erscheint in `freeAssociates`, wie früher `_GODP`/`_WITN`.
+- `noteXref` und Notizen lesen auch `SNOTE`.
+- `uids` liest `UID` und `_UID`. `UID` steht nicht mehr als Fakt in der Liste.
+- `media[].type` ist `MEDI`, klein geschrieben wie bisher (`photo`, `card`); bei `OTHER` die Phrase.
+- `extras` meldet die GOV-Kennung (`PLAC:EXID` mit GOV-Typ) weiter als `PLAC:_GOV`.
+
+**Testerwartungen an 7.0 angepasst** (Rohwerte, die webtrees7 beim Einlesen vereinheitlicht)
+- `rela` „Godparent“/„Godfather“ werden zu `godparent`/`godfather`;
+- `format` `png` wird zu `image/png`;
+- `lang` „German“ wird zu `de`;
+- Text-Quelle `""` wird zum Datensatz `_S7_1`.
+
+**Ohne Änderung grün:** Orte und `_LOC` (P3) laufen schon gegen webtrees7. Bleibt in P3 nur noch die GOV-Kennung beim Schreiben.
+
+**Beim Schreiben zu klären (P2):** Ein `ASSO` bekam `3 _ROLE GODP`. Das Modul hatte an ein schon umgewandeltes `ASSO` eine zweite Rolle gehängt. Nach dem Protokoll ging dabei keine Person verloren. Die Ursache verschwindet, wenn das Modul selbst 7.0 schreibt.
+
 ### P2 Schreiben
 
 - Zuerst die Bau- und Leseregeln je Thema an eine Stelle ziehen: Paten, Quellenverweis, Notiz, Datum, Medium.

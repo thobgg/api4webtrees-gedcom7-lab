@@ -10,10 +10,12 @@ use Fisharebest\Webtrees\Elements\UnknownElement;
 use Fisharebest\Webtrees\Enums\AccessLevel;
 use Fisharebest\Webtrees\Enums\Sex;
 use Fisharebest\Webtrees\Fact;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Converter;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Media;
+use Fisharebest\Webtrees\MediaFile;
 use Fisharebest\Webtrees\Note;
 use Fisharebest\Webtrees\Place;
 use Fisharebest\Webtrees\PlaceLocation;
@@ -33,6 +35,7 @@ use function implode;
 use function html_entity_decode;
 use function in_array;
 use function mb_strtolower;
+use function strtolower;
 use function preg_match;
 use function preg_replace;
 use function str_replace;
@@ -329,9 +332,9 @@ trait JsonBuilders
                 'sources'        => $this->factSources($fact, $tree),
                 'associates'     => $this->factAssociates($fact, $tree),
                 'freeAssociates' => $free,
-                // Ab Stufe 23: eine Notiz, die auf einen Notiz-Datensatz zeigt (1 NOTE @N1@) - Clients aendern sie dann
+                // Ab Stufe 23: eine Notiz, die auf einen Notiz-Datensatz zeigt (1 SNOTE @N1@) - Clients aendern sie dann
                 // nicht als Text, sonst ginge die Verknuepfung verloren.
-                'noteXref'       => $tag === 'NOTE' && preg_match('/^@([^@]+)@$/', $fact->value(), $nx) === 1 ? $nx[1] : null,
+                'noteXref'       => in_array($tag, ['NOTE', 'SNOTE'], true) && preg_match('/^@([^@]+)@$/', $fact->value(), $nx) === 1 ? $nx[1] : null,
             ];
         }
 
@@ -354,6 +357,15 @@ trait JsonBuilders
         $out = [];
         foreach (['PLAC' => ['_GOV', '_POST', '_MAIDENHEAD'], 'ADDR' => ['_NAME']] as $parent => $tags) {
             foreach (GedcomText::subrecords("\n" . $gedcom, 2, $parent) as [, $sub]) {
+                // GEDCOM 7.0: die GOV-Kennung ist eine EXID mit TYPE https://gov.genealogy.net/
+                if ($parent === 'PLAC') {
+                    foreach (GedcomText::subrecords($sub, 3, 'EXID') as [$value, $inner]) {
+                        if (trim($value) !== '' && trim(GedcomText::subrecords($inner, 4, 'TYPE')[0][0] ?? '') === Gedcom7Converter::EXID_GOV) {
+                            $out[] = ['tag' => 'PLAC:_GOV', 'value' => trim($value), 'date' => null];
+                        }
+                    }
+                }
+
                 foreach ($tags as $tag) {
                     foreach (GedcomText::subrecords($sub, 3, $tag) as [$value, $inner]) {
                         if (trim($value) === '') {
@@ -405,7 +417,7 @@ trait JsonBuilders
     }
 
     /**
-     * Ab Stufe 34: die eindeutigen Kennungen eines Datensatzes (1 _UID, GEDCOM-L/PAF) - Programme erkennen daran denselben
+     * Ab Stufe 34: die eindeutigen Kennungen eines Datensatzes (1 UID, aeltere Daten 1 _UID) - Programme erkennen daran denselben
      * Datensatz in zwei Dateien wieder.
      *
      * @return list<string>
@@ -414,7 +426,7 @@ trait JsonBuilders
     {
         return array_values(array_filter(array_map(
             static fn (array $t): string => trim($t[0]),
-            GedcomText::subrecords("\n" . $record->gedcom(), 1, '_UID')
+            GedcomText::subrecords("\n" . $record->gedcom(), 1, '_?UID')
         ), static fn (string $v): bool => $v !== ''));
     }
 
@@ -470,24 +482,19 @@ trait JsonBuilders
     }
 
     /**
-     * Verknuepfte Personen eines Ereignisses (2 _ASSO @I…@ mit 3 RELA, 3 NOTE, 3 SOUR) - Paten, Trauzeugen ... Bei
+     * Verknuepfte Personen eines Ereignisses (2 ASSO @I…@ mit 3 ROLE, 3 NOTE, 3 SOUR) - Paten, Trauzeugen ... Bei
      * einem Fakt "1 ASSO" an der Person ist der Fakt selbst die Verknuepfung (ein Eintrag, level1: true).
+     * Personen ohne Datensatz (ASSO @VOID@) stehen in freeAssociates.
      *
      * @return array<int,array<string,mixed>>
      */
     private function factAssociates(Fact $fact, Tree $tree): array
     {
-        if ($this->shortTag($fact->tag()) === 'ASSO') {
-            [, $rest] = array_pad(explode("\n", $fact->gedcom(), 2), 2, '');
-            $entry    = $this->associateJson($fact->value(), $rest === '' ? '' : "\n" . $rest, 1, $tree, true);
+        $level1 = $this->shortTag($fact->tag()) === 'ASSO';
+        $data   = [];
 
-            return $entry === null ? [] : [$entry];
-        }
-
-        $data = [];
-
-        foreach (GedcomText::subrecords($fact->gedcom(), 2, '_ASSO') as [$value, $sub]) {
-            $entry = $this->associateJson($value, $sub, 2, $tree, false);
+        foreach (Associates::fromBlock($level1 ? "\n" . $fact->gedcom() : $fact->gedcom(), $level1 ? 1 : 2) as $associate) {
+            $entry = $associate['xref'] === null ? null : $this->associateJson($associate, $level1 ? 1 : 2, $tree, $level1);
 
             if ($entry !== null) {
                 $data[] = $entry;
@@ -502,27 +509,26 @@ trait JsonBuilders
      * sehen, bleiben nur xref und private: true - kein Name, kein Geschlecht. Darf er nicht einmal den Verweis sehen
      * (canShowName), faellt der Eintrag ganz weg. Verweise auf fehlende Datensaetze fallen weg.
      *
+     * @param array{xref:string|null,phrase:string,rela:string,role:string,sub:string} $associate
+     *
      * @return array<string,mixed>|null
      */
-    private function associateJson(string $value, string $sub, int $level, Tree $tree, bool $level1): array|null
+    private function associateJson(array $associate, int $level, Tree $tree, bool $level1): array|null
     {
-        if (preg_match('/^@([^@]+)@$/', trim($value), $match) !== 1) {
-            return null;
-        }
-
-        $individual = Registry::individualFactory()->make($match[1], $tree);
+        $individual = Registry::individualFactory()->make((string) $associate['xref'], $tree);
 
         if (!$individual instanceof Individual || !$individual->canShowName()) {
             return null;
         }
 
-        $sub_level       = $level + 1;
-        $private = !$individual->canShow();
-        $rela    = trim(GedcomText::subrecords($sub, $sub_level, 'RELA')[0][0] ?? '');
-        $role    = $this->associateRole($rela);
+        $sub       = $associate['sub'];
+        $sub_level = $level + 1;
+        $private   = !$individual->canShow();
+        $rela      = $associate['rela'];
+        $role      = $associate['role'];
 
         return [
-            'xref'    => $match[1],
+            'xref'    => $individual->xref(),
             'name'    => $private ? null : $this->recordName($individual),
             'sex'     => $private ? null : $this->sexCode($individual),
             'rela'    => $rela,
@@ -540,24 +546,6 @@ trait JsonBuilders
     private function visibleXref(Individual|null $individual): string|null
     {
         return $individual instanceof Individual && $individual->canShow() ? $individual->xref() : null;
-    }
-
-    /**
-     * RELA normalisiert, ohne Ruecksicht auf Gross-/Kleinschreibung: godparent, witness oder other.
-     */
-    private function associateRole(string $rela): string
-    {
-        $rela = mb_strtolower(trim($rela));
-
-        if (in_array($rela, ['godparent', 'godfather', 'godmother', 'pate', 'patin', 'taufpate', 'taufpatin', 'gevatter', 'gevatterin'], true)) {
-            return 'godparent';
-        }
-
-        if (in_array($rela, ['witness', 'trauzeuge', 'trauzeugin', 'zeuge', 'zeugin'], true)) {
-            return 'witness';
-        }
-
-        return 'other';
     }
 
     /**
@@ -592,7 +580,6 @@ trait JsonBuilders
             $records = $records->merge($service->linkedIndividuals($individual, $type))->merge($service->linkedFamilies($individual, $type));
         }
 
-        $pointer = '@' . $individual->xref() . '@';
         $data    = [];
         $order   = [];
 
@@ -602,20 +589,14 @@ trait JsonBuilders
                 ?? $facts->first(fn (Fact $fact): bool => $this->shortTag($fact->tag()) === 'BAPM');
 
             foreach ($facts as $fact) {
-                $links = [];
+                $level1 = $this->shortTag($fact->tag()) === 'ASSO';
 
-                if ($this->shortTag($fact->tag()) === 'ASSO' && trim($fact->value()) === $pointer) {
-                    $links[] = [trim($fact->attribute('RELA')), true];
-                }
-
-                foreach (GedcomText::subrecords($fact->gedcom(), 2, '_ASSO') as [$value, $sub]) {
-                    if (trim($value) === $pointer) {
-                        $links[] = [trim(GedcomText::subrecords($sub, 3, 'RELA')[0][0] ?? ''), false];
+                foreach (Associates::fromBlock($level1 ? "\n" . $fact->gedcom() : $fact->gedcom(), $level1 ? 1 : 2) as $associate) {
+                    if ($associate['xref'] !== $individual->xref()) {
+                        continue;
                     }
-                }
 
-                foreach ($links as [$rela, $level1]) {
-                    $role  = $this->associateRole($rela);
+                    ['rela' => $rela, 'role' => $role] = $associate;
                     $shown = $level1 && $role === 'godparent' && $baptism instanceof Fact ? $baptism : $fact;
                     $date  = $shown->date();
 
@@ -646,6 +627,17 @@ trait JsonBuilders
         usort($keys, static fn (int $a, int $b): int => $order[$a] <=> $order[$b] ?: $a <=> $b);
 
         return array_map(static fn (int $key): array => $data[$key], $keys);
+    }
+
+    private function mediumJson(MediaFile $media_file): string|null
+    {
+        [$medium, $phrase] = $media_file->medium();
+
+        if ($medium === 'OTHER' && $phrase !== '') {
+            return mb_strtolower($phrase);
+        }
+
+        return $medium === '' ? null : strtolower($medium);
     }
 
     /**
@@ -702,8 +694,9 @@ trait JsonBuilders
                 // Pfad der Datei im Medienordner des Baums (ab Stufe 9) - damit eine App die Datei bei anderen Modulen
                 // benennen kann, etwa um ueber Sammlungen EXIF zu schreiben. null bei Internetadressen.
                 'path'    => $media_file->isExternal() ? null : $media_file->filename(),
-                // Art (FORM:TYPE, z. B. photo, document) und Format (jpg, pdf) - ab Stufe 23
-                'type'    => $media_file->type() === '' ? null : $media_file->type(),
+                // Art (FORM:MEDI, klein wie in GEDCOM 5.5.1: photo, card; OTHER mit PHRASE: die Phrase) und Format
+                // (Medientyp, z. B. image/jpeg) - ab Stufe 23
+                'type'    => $this->mediumJson($media_file),
                 'format'  => $media_file->format() === '' ? null : $media_file->format(),
             ];
         }
@@ -815,6 +808,12 @@ trait JsonBuilders
         $kinds = [];
         $free  = [];
 
+        foreach (Associates::fromBlock($fact->gedcom(), 2) as $associate) {
+            if ($associate['xref'] === null && $associate['phrase'] !== '') {
+                $free = [...$free, ...$this->freeEntries($associate['role'], str_contains($associate['phrase'], ';') ? $associate['phrase'] : $associate['phrase'] . ';')];
+            }
+        }
+
         foreach (['_GODP' => 'godparent', '_WITN' => 'witness'] as $tag => $role) {
             foreach (GedcomText::subrecords($fact->gedcom(), 2, $tag) as [$value, $sub]) {
                 $text = GedcomText::withContinuations($value, $sub, 2);
@@ -833,8 +832,8 @@ trait JsonBuilders
     }
 
     /**
-     * Notizen "<ebene> NOTE" in einem Block: Texte mit Fortsetzungen (CONT = neue Zeile, CONC = angehaengt), Verweise
-     * auf Notiz-Datensaetze aufgeloest - nur sichtbare. Leere fallen weg.
+     * Notizen "<ebene> NOTE" und "<ebene> SNOTE" in einem Block: Texte mit Fortsetzungen, Verweise auf Notiz-Datensaetze
+     * aufgeloest - nur sichtbare. Leere fallen weg.
      *
      * @return array<int,string>
      */
@@ -842,7 +841,7 @@ trait JsonBuilders
     {
         $notes = [];
 
-        foreach (GedcomText::subrecords($block, $level, 'NOTE') as [$value, $sub]) {
+        foreach (GedcomText::subrecords($block, $level, 'S?NOTE') as [$value, $sub]) {
             if (preg_match('/^@([^@]+)@$/', trim($value), $match) === 1) {
                 $note = Registry::noteFactory()->make($match[1], $tree);
                 $text = $note instanceof Note && $note->canShow() ? $note->getNote() : '';

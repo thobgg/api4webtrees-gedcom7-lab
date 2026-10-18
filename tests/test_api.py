@@ -152,12 +152,13 @@ class Paten(unittest.TestCase):
         self.assertIn(anna["label"], ("Patin", "Godmother"), "Beschriftung nach dem Geschlecht der verknuepften Person")
         self.assertEqual(["Schwester der Mutter"], anna["notes"])
         self.assertEqual(("S1", "Taufen 1800, Nr. 4"), (anna["sources"][0]["xref"], anna["sources"][0]["page"]))
-        # Gross-/Kleinschreibung und aeltere Werte: Godparent, godfather -> role godparent, rela bleibt roh
-        self.assertEqual(("Godparent", "godparent"), (paten["I3"]["rela"], paten["I3"]["role"]))
+        # Gross-/Kleinschreibung und aeltere Werte: Godparent, godfather -> role godparent. GEDCOM 7.0 vereinheitlicht
+        # "Godparent" beim Umwandeln zu ROLE GODP, rela ist dann godparent.
+        self.assertEqual(("godparent", "godparent"), (paten["I3"]["rela"], paten["I3"]["role"]))
         self.assertEqual(("godfather", "godparent"), (paten["I5"]["rela"], paten["I5"]["role"]))
         self.assertIn(paten["I5"]["label"], ("Pate", "Godfather"))
         # 1 ASSO an der Person: in der Taufe mit level1, der Fakt ASSO bleibt daneben stehen (aeltere Clients)
-        self.assertEqual(("Godfather", "godparent", True), (paten["I4"]["rela"], paten["I4"]["role"], paten["I4"]["level1"]))
+        self.assertEqual(("godfather", "godparent", True), (paten["I4"]["rela"], paten["I4"]["role"], paten["I4"]["level1"]))
         asso = self.fakt("verwalter", "I1", "ASSO")
         self.assertEqual(["I4"], [a["xref"] for a in asso["associates"]])
         self.assertTrue(asso["associates"][0]["level1"])
@@ -340,7 +341,7 @@ class Orte(unittest.TestCase):
         self.assertEqual(True, m["ok"], m)
         self.assertEqual(["Ortsansicht"], [x["title"] for x in s.get("Place", "testbaum", name="Offenbach").json["location"]["media"]])
         orts_medium = s.get("Place", "testbaum", name="Offenbach").json["location"]["media"][0]
-        self.assertEqual(("photo", "png"), (orts_medium["type"], orts_medium["format"].lower()))
+        self.assertEqual(("photo", "image/png"), (orts_medium["type"], orts_medium["format"].lower()))
         self.assertTrue(any("1" in i for i in orts_medium["info"]), orts_medium["info"])
         # Titel und Art aendern (Route MediaObject)
         self.assertEqual(True, s.post("MediaObject", "testbaum", {"title": "Ortsansicht 1926", "type": "card"}, xref=m["media"]).json["ok"])
@@ -770,8 +771,9 @@ class GedcomL(unittest.TestCase):
         self.assertNotEqual("", next(f for f in fam["facts"] if f["tag"] == "_STAT")["value"])
         self.assertEqual(("6", None), (fam["tasks"][0]["priority"], fam["tasks"][0]["description"]))
         loc = s.get("Place", "gedcoml", name="Bienenbüttel").json["location"]
+        # GEDCOM 7.0: Sprachen als BCP 47 (German -> de), webtrees7 wandelt beim Einlesen
         self.assertEqual([{"value": "Bienenbüttel", "date": "FROM 1900", "lang": None, "abbr": "Bbüttel"},
-                          {"value": "Bienenbuettel", "date": "BEF 1900", "lang": "German", "abbr": None}], loc["names"])
+                          {"value": "Bienenbuettel", "date": "BEF 1900", "lang": "de", "abbr": None}], loc["names"])
         self.assertEqual([{"value": "Dorf", "date": "BEF 1972", "govType": "55"},
                           {"value": "Gemeinde", "date": "FROM 1972", "govType": "54"}], loc["types"])
         self.assertEqual(("Gemeinde", "54"), (loc["type"], loc["govType"]))
@@ -994,12 +996,13 @@ class Schreiben(unittest.TestCase):
         self.assertEqual("Theodor, Sohn des\nSchmieds, getauft", q["text"])
         self.assertEqual(["Eintrag gut lesbar"], q["notes"])
         beruf = next(f for f in fakten if f.get("tag") == "OCCU" and f.get("value") == "Schmied")
-        self.assertEqual([("", "laut Martha Meier", ["mündlich 1950"])], [(x["xref"], x["title"], x["notes"]) for x in beruf["sources"]])
+        # GEDCOM 7.0 kennt keine Text-Quellen: webtrees7 macht beim Einlesen einen Quellen-Datensatz daraus
+        self.assertEqual([("_S7_1", "laut Martha Meier", ["mündlich 1950"])], [(x["xref"], x["title"], x["notes"]) for x in beruf["sources"]])
 
     def test_quellen_liste_und_einzeln(self):
         s = U.sitzung("bearbeiter")
         liste = s.get("Sources", "testbaum").json
-        self.assertEqual(["S1"], [x["xref"] for x in liste["sources"]])  # S2 ist vertraulich
+        self.assertEqual(["S1", "_S7_1"], [x["xref"] for x in liste["sources"]])  # S2 ist vertraulich, _S7_1 die Text-Quelle
         s1 = liste["sources"][0]
         self.assertEqual(("Pfarramt Offenbach", "Offenbach, 1790–1830", "Bistumsarchiv Mainz", "KB 12", 4),
                          (s1["author"], s1["publication"], s1["repository"], s1["callNumber"], s1["uses"]))

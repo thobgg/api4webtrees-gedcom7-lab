@@ -338,7 +338,7 @@ trait WriteActions
 
             $sub  = (string) preg_replace('/\n3 RELA [^\n]*/', '', $sub);
             $rela = match ($role) {
-                'godparent', 'witness' => $existing_rela !== '' && $this->associateRole($existing_rela) === $role ? $existing_rela : $role,
+                'godparent', 'witness' => $existing_rela !== '' && Associates::role($existing_rela) === $role ? $existing_rela : $role,
                 default => $rela,
             };
 

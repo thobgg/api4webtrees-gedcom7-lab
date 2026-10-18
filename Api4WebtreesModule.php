@@ -147,7 +147,7 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
     // Diese Tags sind Verknuepfungen oder Verwaltungsdaten, keine Ereignisse - sie fehlen in facts[] der Antworten.
     // (HUSB/WIFE/CHIL sind die Verknuepfungen innerhalb eines Familien-Datensatzes.) Verwandt, aber anders gemeint:
     // GedcomText::LINK_TAGS (was der Fakten-Editor nicht anfassen darf) und MERGE_LINK_TAGS (was beim Zusammenfuehren bleibt).
-    private const array SKIP_FACTS = ['FAMS', 'FAMC', 'HUSB', 'WIFE', 'CHIL', 'OBJE', 'CHAN', '_UID', '_TODO', '_WT_OBJE_SORT'];
+    private const array SKIP_FACTS = ['FAMS', 'FAMC', 'HUSB', 'WIFE', 'CHIL', 'OBJE', 'CHAN', 'UID', '_UID', '_TODO', '_WT_OBJE_SORT'];
 
     private const array ADDABLE_TAGS = [
         'INDI' => ['BIRT', 'CHR', 'BAPM', 'CONF', 'DEAT', 'BURI', 'CREM', 'OCCU', 'RESI', 'EDUC', 'GRAD', 'RELI', 'NATI', 'TITL', 'EMIG', 'IMMI', 'NATU', 'CENS', 'RETI', 'EVEN', 'FACT', 'NOTE'],
