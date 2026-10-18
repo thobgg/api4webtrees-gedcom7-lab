@@ -156,7 +156,10 @@ trait WriteActions
             $record->updateFact($fact_id, $gedcom, true);
         }
 
-        return $this->written($record);
+        // Ab Stufe 37: gespeichert, aber nach GEDCOM 7.0 unvollstaendig (z. B. EVEN ohne TYPE)
+        $warnings = GedcomText::factGedcomWarnings($gedcom);
+
+        return $this->written($record, $warnings === [] ? [] : ['warnings' => $warnings]);
     }
 
     /**

@@ -305,7 +305,10 @@ trait JsonBuilders
                 // Ab Stufe 28: true = eine Aenderung, die auf Freigabe wartet. Sehen nur Benutzer, denen webtrees ausstehende
                 // Aenderungen zeigt (Bearbeiter, Moderatoren); fuer alle anderen immer false.
                 'pending'        => $fact->isPendingAddition(),
-                'tag'            => $tag,
+                // Ein Verweis auf eine gemeinsame Notiz heisst in GEDCOM 7.0 "1 SNOTE @N1@"; die Apps kennen ihn als NOTE
+                // (mit noteXref). gedcomTag (ab Stufe 37) ist das Tag, wie es gespeichert ist.
+                'tag'            => $tag === 'SNOTE' ? 'NOTE' : $tag,
+                'gedcomTag'      => $tag,
                 'label'          => $this->factLabel($fact),
                 // false: ein Tag, das webtrees nicht kennt (Hersteller-Tag ohne Definition, z. B. _INET).
                 // Clients koennen solche Zeilen ausblenden; in webtrees selbst bleiben sie unveraendert erhalten.
@@ -727,13 +730,15 @@ trait JsonBuilders
             'jd'   => $date->minimumJulianDay(),
         ];
 
-        // Bei Ereignissen zusaetzlich das Datum, wie es im GEDCOM steht ("ABT 1850", "9 NOV 1957") - damit ein
-        // Client es zum Bearbeiten vorbelegen kann, ohne die Anzeige ("um 1850") zurueckuebersetzen zu muessen.
-        if ($gedcom !== '') {
-            $json['gedcom'] = $gedcom;
+        // Bei Ereignissen zusaetzlich das Datum im GEDCOM-Format ("ABT 1850", "9 NOV 1957") - damit ein Client es
+        // zum Bearbeiten vorbelegen kann, ohne die Anzeige ("um 1850") zurueckuebersetzen zu muessen. gedcom wie in
+        // GEDCOM 5.5.1 ("@#DJULIAN@ 1700", "INT 1850 (zu Ostern)"), so verstehen es die Apps und schicken es zurueck;
+        // ab Stufe 37 gedcom7 und phrase, wie es gespeichert ist ("JULIAN 1700", "1850" + "zu Ostern").
+        if ($gedcom !== '' || $phrase !== '') {
+            $json['gedcom']  = GedcomText::date551($gedcom, $phrase);
+            $json['gedcom7'] = $gedcom;
         }
 
-        // Ab Stufe 37: der Wortlaut neben dem Datum (GEDCOM 7.0 DATE:PHRASE, frueher "INT 1850 (zu Ostern)")
         if ($phrase !== '') {
             $json['phrase'] = $phrase;
         }

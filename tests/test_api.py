@@ -746,6 +746,16 @@ class Gedcom7(unittest.TestCase):
                 self.assertNotEqual(False, a.json.get("ok") if isinstance(a.json, dict) else None, a)
 
 
+    def test_gemeinsame_notiz_als_note(self):
+        """1 SNOTE @N1@ kommt wie in 5.5.1 als Fakt NOTE mit noteXref; gedcomTag nennt das gespeicherte Tag."""
+        s = U.sitzung("admin")
+        a = s.post("Fact", "gedcoml", {"gedcom": "1 SNOTE @N1@"}, xref="I1")
+        self.assertEqual(True, a.json["ok"], a)
+        notiz = next(f for f in s.get("Individual", "gedcoml", xref="I1").json["facts"] if f.get("gedcomTag") == "SNOTE")
+        self.assertEqual(("NOTE", "N1"), (notiz["tag"], notiz["noteXref"]))
+        self.assertEqual(True, s.post("DeleteFact", "gedcoml", {"factId": notiz["id"]}, xref="I1").json["ok"])
+
+
 class GedcomL(unittest.TestCase):
     """Stufe 34: alle Angaben des GEDCOM-L-Addendums lesen - und nichts davon verlieren, wenn die App schreibt."""
 
@@ -969,20 +979,27 @@ class Schreiben(unittest.TestCase):
 
     @unittest.skipUnless(umgebung.DOCKER, "nur gegen webtrees7")
     def test_datum_und_art_gedcom7(self):
-        """Daten kommen von den Apps wie in GEDCOM 5.5.1 und werden als 7.0 geschrieben; EVEN braucht eine Art."""
+        """Daten kommen von den Apps wie in GEDCOM 5.5.1 und werden als 7.0 geschrieben; EVEN ohne Art gibt eine Warnung."""
         s = U.sitzung("admin")
         xref = s.post("AddIndividual", "testbaum", {"relation": "none", "given": "Dora", "surname": "Datum", "sex": "F", "dead": True,
                                                      "birthDate": "@#DJULIAN@ 1 JAN 1700"}).json["xref"]
         ged = lambda: umgebung.sql("SELECT i_gedcom FROM wt_individuals WHERE i_id = ?", xref)[0][0]  # noqa: E731
         self.assertIn("1 BIRT\n2 DATE JULIAN 1 JAN 1700", ged())
         birt = next(f for f in self.fakten(s, xref) if f.get("tag") == "BIRT")
-        self.assertEqual(("JULIAN 1 JAN 1700", 1700), (birt["date"]["gedcom"], birt["date"]["year"]))
+        # gedcom wie in 5.5.1 (die Apps belegen damit ihr Datumsfeld vor), gedcom7 wie gespeichert
+        self.assertEqual(("@#DJULIAN@ 1 JAN 1700", "JULIAN 1 JAN 1700", 1700), (birt["date"]["gedcom"], birt["date"]["gedcom7"], birt["date"]["year"]))
         a = s.post("Fact", "testbaum", {"factId": birt["id"], "date": "INT 1700 (zu Neujahr)"}, xref=xref)
         self.assertEqual(True, a.json["ok"], a)
         self.assertIn("1 BIRT\n2 DATE 1700\n3 PHRASE zu Neujahr", ged())
         birt = next(f for f in self.fakten(s, xref) if f.get("tag") == "BIRT")
-        self.assertEqual(("1700", "zu Neujahr"), (birt["date"]["gedcom"], birt["date"]["phrase"]))
-        self.assertEqual("type-required", s.post("Fact", "testbaum", {"tag": "EVEN", "date": "1720"}, xref=xref).json["error"])
+        self.assertEqual(("INT 1700 (zu Neujahr)", "1700", "zu Neujahr"), (birt["date"]["gedcom"], birt["date"]["gedcom7"], birt["date"]["phrase"]))
+        # Die App schickt das vorbelegte Datum unveraendert zurueck: der Wortlaut bleibt
+        a = s.post("Fact", "testbaum", {"factId": birt["id"], "date": birt["date"]["gedcom"], "place": "Neudorf"}, xref=xref)
+        self.assertEqual(True, a.json["ok"], a)
+        self.assertIn("2 DATE 1700\n3 PHRASE zu Neujahr", ged())
+        # EVEN ohne Art: gespeichert (die Apps haben kein Feld dafuer), aber mit Warnung
+        a = s.post("Fact", "testbaum", {"tag": "EVEN", "date": "1720"}, xref=xref).json
+        self.assertEqual((True, ["type-required"]), (a["ok"], a["warnings"]))
         self.assertEqual(True, s.post("Fact", "testbaum", {"tag": "EVEN", "type": "Umzug", "date": "abt 1720"}, xref=xref).json["ok"])
         self.assertIn("1 EVEN\n2 TYPE Umzug\n2 DATE ABT 1720", ged().replace("\n2 DATE ABT 1720\n2 TYPE Umzug", "\n2 TYPE Umzug\n2 DATE ABT 1720"))
         self.assertEqual(True, s.post("DeleteRecord", "testbaum", {}, xref=xref).json["ok"])

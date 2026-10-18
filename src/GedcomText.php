@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Api4Webtrees;
 
 use Fisharebest\Webtrees\Date;
+use Fisharebest\Webtrees\Gedcom7\Gedcom551Downgrade;
 use Fisharebest\Webtrees\Gedcom7\Gedcom7Payload;
 
 use function array_map;
@@ -56,11 +57,6 @@ final class GedcomText
             }
         }
 
-        // GEDCOM 7.0: EVEN und FACT brauchen eine Art
-        if (in_array($tag, ['EVEN', 'FACT'], true) && preg_match('/\n2 TYPE [^\n]*\S/', $gedcom) !== 1) {
-            return 'type-required';
-        }
-
         // Verknuepfungen entstehen nur ueber AddIndividual, Media und Unlink - nie ueber den Fakten-Editor.
         if (in_array($tag, self::LINK_TAGS, true)) {
             return 'link-tag-not-allowed';
@@ -80,6 +76,21 @@ final class GedcomText
         }
 
         return null;
+    }
+
+    /**
+     * Was einem Ereignis nach GEDCOM 7.0 fehlt, es aber nicht am Speichern hindert - wie "Trotzdem speichern" in den
+     * Formularen von webtrees7. Die Apps legen EVEN und FACT bisher ohne Art an.
+     *
+     * @return list<string>
+     */
+    public static function factGedcomWarnings(string $gedcom): array
+    {
+        if (preg_match('/^1 (EVEN|FACT)\b/', $gedcom) === 1 && preg_match('/\n2 TYPE [^\n]*\S/', $gedcom) !== 1) {
+            return ['type-required'];
+        }
+
+        return [];
     }
 
     /**
@@ -185,6 +196,21 @@ final class GedcomText
         }
 
         return "\n1 " . $tag . $date . ($place === '' ? '' : "\n2 PLAC " . $place);
+    }
+
+    /**
+     * Ein Datum aus GEDCOM 7.0 so, wie es in 5.5.1 stuende: "JULIAN 1700" -> "@#DJULIAN@ 1700", mit PHRASE
+     * "INT 1700 (zu Neujahr)". Die Apps belegen damit ihr Datumsfeld vor und schicken es so zurueck (dateLines()).
+     */
+    public static function date551(string $value, string $phrase): string
+    {
+        if ($value === '' && $phrase === '') {
+            return '';
+        }
+
+        $gedcom = "0 @X@ INDI\n1 BIRT\n2 DATE" . ($value === '' ? '' : ' ' . $value) . ($phrase === '' ? '' : "\n3 PHRASE " . $phrase);
+
+        return preg_match('/\n2 DATE ?([^\n]*)/', (new Gedcom551Downgrade())->downgrade($gedcom), $match) === 1 ? $match[1] : $value;
     }
 
     /**
