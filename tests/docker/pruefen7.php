@@ -3,7 +3,7 @@
 /**
  * Nach tests/test_api.py: Was hat das Modul als GEDCOM 5.5.1 geschrieben?
  * - Eintraege "GEDCOM 5.5.1 converted to GEDCOM 7.0" (der Wandler im Kern ist eingesprungen)
- * - Datensaetze und offene Aenderungen, die nicht 7.0 sind (der Wandler konnte sie nicht umwandeln)
+ * - Datensaetze und Aenderungen, die nicht 7.0 sind (der Wandler konnte sie nicht umwandeln)
  */
 
 declare(strict_types=1);
@@ -61,9 +61,10 @@ foreach ($tabellen as $tabelle => [$id, $spalte]) {
         }
     }
 }
-foreach (DB::table('change')->where('status', '=', 'pending')->select(['xref', 'new_gedcom'])->get() as $zeile) {
+// Auch angenommene Aenderungen: ein Test kann einen Datensatz schreiben und danach wieder loeschen
+foreach (DB::table('change')->select(['change_id', 'status', 'xref', 'new_gedcom'])->orderBy('change_id')->get() as $zeile) {
     if ($zeile->new_gedcom !== '' && !Gedcom7Storage::isGedcom7($zeile->new_gedcom)) {
-        $nicht7[] = 'change ' . $zeile->xref . "\n   " . str_replace("\n", "\n   ", $zeile->new_gedcom);
+        $nicht7[] = 'change ' . $zeile->change_id . ' (' . $zeile->status . ') ' . $zeile->xref . "\n   " . str_replace("\n", "\n   ", $zeile->new_gedcom);
     }
 }
 

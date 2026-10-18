@@ -148,6 +148,28 @@ Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt.
 - Roh-Eingabe `{gedcom: …}`: siehe Entscheidung 4.
 - `ADDABLE_TAGS` bekommt `SNOTE` und gegebenenfalls `NO`.
 
+### Ergebnis P2 (18.10.2026, gegen ed039c653d)
+
+61 von 63 Tests grün. Rot sind nur noch die beiden P4-Punkte.
+
+**Schreibt jetzt 7.0**
+- Paten und Zeugen: `ASSO` + `ROLE` (+ `PHRASE`), ohne Datensatz `ASSO @VOID@` + `PHRASE`. Die Regeln stehen in `Associates`.
+- Medienart: `MEDI` (+ `PHRASE`). Die Regeln stehen in `Medium`. Die API nimmt weiter `photo`, `document` usw. an.
+- Text-Quellen (Entscheidung 3 = a): `SOUR @VOID@`. Der Text steht in der ersten Zeile von `PAGE`, die Seite in den Zeilen darunter. Gelesen wird das wieder als `title` und `page`.
+- Daten: `GedcomText::dateLines()` wandelt 5.5.1-Eingaben mit `Gedcom7Payload::date()`, also `@#DJULIAN@` zu `JULIAN` und `INT … (…)` zu `PHRASE`.
+- Neu ist `date.phrase` (Stufe 37).
+- `EVEN` und `FACT` ohne `TYPE` werden abgelehnt (`type-required`).
+
+**Prüfung:** `pruefen7.php` prüft jetzt auch alle angenommenen Änderungen, nicht nur den Endstand. Ein Test kann etwas schreiben und wieder löschen, früher fiel so die Text-Quelle durch.
+
+**Umwandlungen durch den Kern:** nur noch eine. Der Test „Conctest“ schickt über die Roh-Eingabe `{gedcom}` absichtlich `CONC`, das hängt an Entscheidung 4.
+
+**`@@` braucht keine Maskierung:** webtrees7 speichert ohne Escapes (`Gedcom7Record::create` entfernt sie). Das Modul schreibt also richtig, wenn es `@` unmaskiert lässt. `looksLikePointer()` verhindert weiter Werte, die wie `@X1@` aussehen.
+
+**Offen in P2**
+- Entscheidung 4: die Roh-Eingabe `{gedcom}`.
+- `ADDABLE_TAGS` um `SNOTE`/`NO` ergänzen, zusammen mit P5 (Tags).
+
 ### P3 Orte und `_LOC`
 
 Dieser Schritt ist nach der Codemenge der größte.

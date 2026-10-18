@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Api4Webtrees;
 
 use Fisharebest\Webtrees\Date;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Payload;
 
 use function array_map;
 use function array_slice;
@@ -53,6 +54,11 @@ final class GedcomText
             if (preg_match('/^[2-9] [A-Z_][A-Z0-9_]*( .*)?$/', $line) !== 1) {
                 return 'invalid-gedcom';
             }
+        }
+
+        // GEDCOM 7.0: EVEN und FACT brauchen eine Art
+        if (in_array($tag, ['EVEN', 'FACT'], true) && preg_match('/\n2 TYPE [^\n]*\S/', $gedcom) !== 1) {
+            return 'type-required';
         }
 
         // Verknuepfungen entstehen nur ueber AddIndividual, Media und Unlink - nie ueber den Fakten-Editor.
@@ -171,14 +177,30 @@ final class GedcomText
 
     public static function eventGedcom(string $tag, string $date, string $place, bool $happened): string
     {
-        $date  = strtoupper(self::line($date));
+        $date  = self::dateLines($date, 2);
         $place = self::line($place);
 
         if ($date === '' && $place === '') {
             return $happened ? "\n1 " . $tag . ' Y' : '';
         }
 
-        return "\n1 " . $tag . ($date === '' ? '' : "\n2 DATE " . $date) . ($place === '' ? '' : "\n2 PLAC " . $place);
+        return "\n1 " . $tag . $date . ($place === '' ? '' : "\n2 PLAC " . $place);
+    }
+
+    /**
+     * "<level> DATE" (+ PHRASE) in GEDCOM 7.0. Die Apps schicken Daten wie in 5.5.1 ("@#DJULIAN@ 1 JAN 1700",
+     * "INT 1850 (zu Ostern)", "abt 1850"); 7.0 ("JULIAN 1 JAN 1700") geht auch. Leer ohne Datum.
+     */
+    public static function dateLines(string $date, int $level): string
+    {
+        $date              = self::line($date);
+        [$value, $phrase] = Gedcom7Payload::date($date) ?? ['', $date];
+
+        if ($value === '' && $phrase === '') {
+            return '';
+        }
+
+        return "\n" . $level . ' DATE' . ($value === '' ? '' : ' ' . $value) . ($phrase === '' ? '' : "\n" . ($level + 1) . ' PHRASE ' . $phrase);
     }
 
     /**

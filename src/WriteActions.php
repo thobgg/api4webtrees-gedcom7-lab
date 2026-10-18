@@ -48,6 +48,7 @@ use function preg_replace;
 use function preg_replace_callback;
 use function response;
 use function str_contains;
+use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
@@ -643,17 +644,28 @@ trait WriteActions
         [$head, $rest] = $with_break === '' ? ['', ''] : (array_pad(explode("\n", ltrim($with_break, "\n"), 2), 2, ''));
         $rest = $rest === '' ? '' : "\n" . $rest;
 
-        // Die Quelle selbst: neu oder wie bisher (samt CONT-Fortsetzungen einer Text-Quelle)
+        // GEDCOM 7.0 kennt keine Text-Quellen: "SOUR @VOID@", der Text steht in der ersten Zeile von PAGE, die Seite darunter
+        $void           = str_ends_with($head, ' SOUR @VOID@');
+        $page_now       = GedcomText::firstValue($rest, $sub_level, 'PAGE');
+        [$title, $page] = $void ? array_pad(explode("\n", $page_now, 2), 2, '') : ['', $page_now];
+
         if (array_key_exists('source', $body)) {
             $value = $this->str($body, 'source');
-            $head = $level . ' SOUR ' . (str_starts_with($value, '@') ? $value : GedcomText::multiline($value, $sub_level));
-            $rest = (string) preg_replace('/^(\n' . $sub_level . ' CON[CT] ?[^\n]*)+/', '', $rest);
+            $void  = !str_starts_with($value, '@');
+            $title = $void ? GedcomText::line(str_replace("\n", ' ', $value)) : '';
+            $head  = $level . ' SOUR ' . ($void ? '@VOID@' : $value);
+            $rest  = (string) preg_replace('/^(\n' . $sub_level . ' CON[CT] ?[^\n]*)+/', '', $rest);
         } elseif ($head === '') {
-            $head = $level . ' SOUR';
+            $head = $level . ' SOUR @VOID@';
+            $void = true;
         }
 
         if (array_key_exists('page', $body)) {
-            $page = GedcomText::multiline($this->str($body, 'page'), $sub_level + 1);
+            $page = $this->str($body, 'page');
+        }
+
+        if (array_key_exists('source', $body) || array_key_exists('page', $body)) {
+            $page = GedcomText::multiline($void ? $title . ($page === '' ? '' : "\n" . $page) : $page, $sub_level + 1);
             $rest = GedcomText::replaceSubrecords($rest, $sub_level, 'PAGE', $page === '' ? '' : "\n" . $sub_level . ' PAGE ' . $page);
         }
 
@@ -665,13 +677,13 @@ trait WriteActions
         if (array_key_exists('date', $body) || array_key_exists('text', $body)) {
             // DATA buendelt Datum und Text der Fundstelle; nicht genannte Teile aus dem alten DATA uebernehmen
             $existing_data = GedcomText::subrecords($rest, $sub_level, 'DATA')[0][1] ?? '';
-            $date    = array_key_exists('date', $body) ? strtoupper(GedcomText::line($this->str($body, 'date'))) : (GedcomText::subrecords($existing_data, $sub_level + 1, 'DATE')[0][0] ?? '');
-            $text     = array_key_exists('text', $body) ? $this->str($body, 'text') : GedcomText::firstValue(ltrim($existing_data, "\n"), $sub_level + 1, 'TEXT');
-            $data     = '';
-
-            if ($date !== '') {
-                $data .= "\n" . ($sub_level + 1) . ' DATE ' . $date;
-            }
+            $old_date      = GedcomText::subrecords($existing_data, $sub_level + 1, 'DATE')[0] ?? null;
+            $text          = array_key_exists('text', $body) ? $this->str($body, 'text') : GedcomText::firstValue(ltrim($existing_data, "\n"), $sub_level + 1, 'TEXT');
+            $data          = match (true) {
+                array_key_exists('date', $body) => GedcomText::dateLines($this->str($body, 'date'), $sub_level + 1),
+                $old_date !== null              => "\n" . ($sub_level + 1) . ' DATE ' . $old_date[0] . $old_date[1],
+                default                         => '',
+            };
 
             if (trim($text) !== '') {
                 $data .= "\n" . ($sub_level + 1) . ' TEXT ' . GedcomText::multiline($text, $sub_level + 2);
@@ -1544,9 +1556,8 @@ trait WriteActions
         }
 
         if (array_key_exists('date', $body)) {
-            $date   = strtoupper(GedcomText::line($this->str($body, 'date')));
             $gedcom = (string) preg_replace('/\n2 DATE.*(\n[3-9] .*)*/', '', $gedcom);
-            $gedcom = GedcomText::insertAfterFirstLine($gedcom, $date === '' ? '' : "\n2 DATE " . $date);
+            $gedcom = GedcomText::insertAfterFirstLine($gedcom, GedcomText::dateLines($this->str($body, 'date'), 2));
         }
 
         // Art des Ereignisses (ab Stufe 20), bei der Heirat in webtrees' Form: CIVIL, RELIGIOUS, PARTNERS, COMMON LAW

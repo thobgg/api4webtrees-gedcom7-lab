@@ -318,7 +318,7 @@ trait JsonBuilders
                 // TYPE so, wie webtrees ihn anzeigt (FAM:MARR:TYPE: civil -> "Standesamtliche Heirat"); unbekannte
                 // Werte bleiben roh, ohne TYPE null.
                 'typeLabel'      => $type === '' ? null : $this->plain(Registry::elementFactory()->make($fact->tag() . ':TYPE')->value($type, $tree)),
-                'date'           => $this->dateJson($fact->date(), $fact->attribute('DATE')),
+                'date'           => $this->dateJson($fact->date(), $fact->attribute('DATE'), trim(GedcomText::firstValue(GedcomText::subrecords($fact->gedcom(), 2, 'DATE')[0][1] ?? '', 3, 'PHRASE'))),
                 'place'          => $this->placeJson($place, $fact->latitude(), $fact->longitude()),
                 // Ab Stufe 33: Adresse am Ereignis (2 ADDR mit Fortsetzungen, sonst 3 ADR1), null ohne
                 'address'        => $this->factAddress($fact->gedcom()),
@@ -715,7 +715,7 @@ trait JsonBuilders
     /**
      * @return array<string,mixed>|null
      */
-    private function dateJson(Date $date, string $gedcom = ''): array|null
+    private function dateJson(Date $date, string $gedcom = '', string $phrase = ''): array|null
     {
         if (!$date->isOK()) {
             return null;
@@ -731,6 +731,11 @@ trait JsonBuilders
         // Client es zum Bearbeiten vorbelegen kann, ohne die Anzeige ("um 1850") zurueckuebersetzen zu muessen.
         if ($gedcom !== '') {
             $json['gedcom'] = $gedcom;
+        }
+
+        // Ab Stufe 37: der Wortlaut neben dem Datum (GEDCOM 7.0 DATE:PHRASE, frueher "INT 1850 (zu Ostern)")
+        if ($phrase !== '') {
+            $json['phrase'] = $phrase;
         }
 
         return $json;
@@ -994,7 +999,7 @@ trait JsonBuilders
     {
         $sub_level = $level + 1;
 
-        if (preg_match('/^@([^@]+)@$/', trim($value), $match) === 1) {
+        if (trim($value) !== '@VOID@' && preg_match('/^@([^@]+)@$/', trim($value), $match) === 1) {
             $source = Registry::sourceFactory()->make($match[1], $tree);
 
             if ($source === null || !$source->canShow()) {
@@ -1003,6 +1008,10 @@ trait JsonBuilders
 
             $xref  = $match[1];
             $title = $this->recordName($source);
+        } elseif (trim($value) === '@VOID@') {
+            // Text-Quelle: der Text steht in der ersten Zeile von PAGE, die Seite darunter (siehe citationGedcom)
+            $xref  = '';
+            $title = '';
         } else {
             $xref  = '';
             $title = GedcomText::withContinuations($value, $sub, $level);
@@ -1033,10 +1042,16 @@ trait JsonBuilders
             }
         }
 
+        $page = $page !== null ? GedcomText::withContinuations($page[0], $page[1], $sub_level) : '';
+
+        if (trim($value) === '@VOID@') {
+            [$title, $page] = array_pad(explode("\n", $page, 2), 2, '');
+        }
+
         return [
             'xref'    => $xref,
             'title'   => $title,
-            'page'    => $page !== null ? GedcomText::withContinuations($page[0], $page[1], $sub_level) : '',
+            'page'    => $page,
             'quality' => $quay !== null && preg_match('/^[0-3]$/', trim($quay[0])) === 1 ? (int) trim($quay[0]) : null,
             'date'    => $date_gedcom !== '' ? $this->dateJson(new Date($date_gedcom), $date_gedcom) : null,
             'text'    => implode("\n\n", $texts),
