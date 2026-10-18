@@ -55,6 +55,33 @@ webtrees7 ist ein Fork von webtrees, der GEDCOM 7.0 speichert. 5.5.1 gibt es dor
   
   Das Ergebnis ist die Arbeitsliste für P1 bis P4.
 
+### Messung P0 (18.10.2026, Image webtrees7:76ac5d81d1)
+
+Aufruf: `tests/docker/test.sh [Tag]`. Das Skript startet ein Wegwerf-webtrees7 mit MariaDB in tmpfs (Compose-Projekt `api4webtrees7-test`, kein Port), lässt `test_api.py` laufen und danach `tests/docker/pruefen7.php`.
+
+Ergebnis: 61 Tests, davon 43 grün und 18 rot (14 FAIL, 4 ERROR). Der Kern hat 5-mal umgewandelt. Datensätze, die nicht 7.0 sind: 0.
+
+**Umwandlungen durch den Kern**, also Stellen, an denen das Modul noch 5.5.1 schreibt:
+- `NOTE` mit `CONC`: Das Modul hat einen Fortsetzungstext so geschrieben (I4).
+- `_ASSO` + `RELA witness` und `_WITN` an MARR (F1).
+- `_ASSO` + `RELA godparent`/`Godmother` und `_GODP` an CHR (X8), dreimal.
+  Ein Datensatz trägt danach `3 _ROLE GODP`: Das Modul hat eine zweite Rolle an ein schon umgewandeltes `ASSO` gehängt. Ob dabei etwas verloren ging, ist noch zu prüfen.
+
+**Rote Tests nach Ursache**
+
+| Ursache | Tests | Schritt |
+|---|---|---|
+| Paten und Zeugen lesen (`ROLE`, `@VOID@`, Gegenrichtung) | 9 | P1 |
+| Paten und Zeugen schreiben (Erwartung 5.5.1-Text) | 2 | P2 |
+| Text-Quellen sind beim Einlesen `_S7_n` geworden | 2 | P1, Entscheidung 3 |
+| Medien: `FORM image/png` statt `png` | 1 | P1 |
+| `UID` statt `_UID` | 1 | P1 |
+| Rundlauf GEDCOM-L (Anzahl Zeilen) | 1 | P4 |
+| Zusammenführen: neuer Fakt `CREA` | 1 | P4 |
+| Folgefehler im Ortsteil (Umbenennen) und im Zugangstest | 2 | P3, prüfen |
+
+Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt. `maximal70.ged` fehlt noch.
+
 ### P1 Lesen
 
 - `SNOTE`: betrifft `noteXref`, `notesFromBlock` und Notizen an Quellen und `_LOC`.

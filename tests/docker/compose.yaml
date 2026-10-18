@@ -1,0 +1,34 @@
+# Wegwerf-webtrees7 fuer tests/test_api.py, siehe tests/docker/test.sh.  Kein Port nach aussen.
+name: api4webtrees7-test
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        WEBTREES7_IMAGE: ${WEBTREES7_IMAGE:-webtrees7:76ac5d81d1}
+    image: api4webtrees7-test:${WEBTREES7_TAG:-76ac5d81d1}
+    volumes:
+      - ../..:/var/www/html/modules_v4/api4webtrees:ro
+    tmpfs:
+      - /var/www/html/data
+    environment:
+      WEBTREES_DOCKER: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:11.4
+    tmpfs:
+      - /var/lib/mysql
+    environment:
+      MARIADB_DATABASE: webtrees
+      MARIADB_USER: webtrees
+      MARIADB_PASSWORD: webtrees
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60

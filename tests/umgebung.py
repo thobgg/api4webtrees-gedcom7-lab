@@ -1,4 +1,5 @@
 """Testumgebung fuer api4webtrees: ein frisches webtrees mit SQLite unter `php -S`, nur auf 127.0.0.1.
+Mit WEBTREES_DOCKER=1 stattdessen das webtrees im Container mit MariaDB (tests/docker/test.sh).
 
 Dieselbe Einrichtung wie in wtWin/wtTux ("Neuen Stammbaum auf diesem PC anlegen") und im nas4webtrees-Image:
 Einrichtungsassistent per POST, danach die webtrees-Kommandozeile. Dazu Testbaeume und je Rolle ein Konto.
@@ -27,6 +28,10 @@ MODUL = os.path.dirname(HIER)
 ARBEIT = os.path.join(HIER, ".work")
 WT = os.path.join(ARBEIT, "webtrees")
 PHP = os.environ.get("PHP", "php")
+DOCKER = os.environ.get("WEBTREES_DOCKER") == "1"
+if DOCKER:
+    ARBEIT = "/tmp/api4webtrees"
+    WT = "/var/www/html"
 
 # Wie nas4webtrees VERSIONS: nur bekannte Fassungen ohne eigene ZIP.
 PRUEFSUMMEN = {
@@ -83,6 +88,17 @@ def wt(*args, pruefen=True):
 
 
 def sql(anweisung, *werte):
+    if DOCKER:
+        import pymysql
+        anweisung = anweisung.replace("INSERT OR REPLACE", "REPLACE").replace("?", "%s")
+        con = pymysql.connect(host="db", user="webtrees", password="webtrees", database="webtrees", charset="utf8mb4")
+        try:
+            with con.cursor() as cur:
+                cur.execute(anweisung, werte or None)
+                con.commit()
+                return [tuple(z) for z in cur.fetchall()]
+        finally:
+            con.close()
     con = sqlite3.connect(os.path.join(WT, "data", "webtrees.sqlite"), timeout=30)
     try:
         cur = con.execute(anweisung, werte)
@@ -99,23 +115,26 @@ class Umgebung:
 
     @property
     def basis(self):
-        return f"http://127.0.0.1:{self.port}/"
+        return "http://127.0.0.1/" if DOCKER else f"http://127.0.0.1:{self.port}/"
 
     def aufbauen(self):
         shutil.rmtree(ARBEIT, ignore_errors=True)
         os.makedirs(ARBEIT)
-        with zipfile.ZipFile(_zip()) as z:
-            z.extractall(ARBEIT)
-        os.symlink(MODUL, os.path.join(WT, "modules_v4", "api4webtrees"))
-        router = os.path.join(ARBEIT, "router.php")
-        open(router, "w").write(ROUTER)
+        if DOCKER:
+            self._warten()
+        else:
+            with zipfile.ZipFile(_zip()) as z:
+                z.extractall(ARBEIT)
+            os.symlink(MODUL, os.path.join(WT, "modules_v4", "api4webtrees"))
+            router = os.path.join(ARBEIT, "router.php")
+            open(router, "w").write(ROUTER)
 
-        self.port = _freier_port()
-        log = open(os.path.join(ARBEIT, "php.log"), "ab")
-        self.prozess = subprocess.Popen(
-            [PHP, "-d", "display_errors=0", "-d", "log_errors=1", "-S", f"127.0.0.1:{self.port}", "-t", WT, router],
-            cwd=WT, stdout=log, stderr=subprocess.STDOUT)
-        self._warten()
+            self.port = _freier_port()
+            log = open(os.path.join(ARBEIT, "php.log"), "ab")
+            self.prozess = subprocess.Popen(
+                [PHP, "-d", "display_errors=0", "-d", "log_errors=1", "-S", f"127.0.0.1:{self.port}", "-t", WT, router],
+                cwd=WT, stdout=log, stderr=subprocess.STDOUT)
+            self._warten()
 
         # Einrichtungsassistent, Schritt 6 - wie nas4webtrees-entry.py run_setup_wizard()
         felder = {
@@ -123,6 +142,9 @@ class Umgebung:
             "dbuser": "", "dbpass": "", "dbname": "webtrees", "wtname": "Admin", "wtuser": "admin",
             "wtpass": PASSWORT, "wtemail": "admin@example.invalid", "step": "6",
         }
+        if DOCKER:
+            felder.update({"dbtype": "mysql", "dbhost": "db", "dbport": "3306", "dbuser": "webtrees", "dbpass": "webtrees",
+                           "baseurl": self.basis.rstrip("/")})
         try:
             urllib.request.urlopen(self.basis + "index.php", urllib.parse.urlencode(felder).encode(), timeout=120).read()
         except urllib.error.HTTPError:
@@ -153,7 +175,7 @@ class Umgebung:
                 urllib.request.urlopen(self.basis + "public/css/webtrees.min.css", timeout=2).read(1)
                 return
             except OSError:
-                if self.prozess.poll() is not None:
+                if self.prozess and self.prozess.poll() is not None:
                     break
                 time.sleep(0.2)
         raise RuntimeError("php -S startet nicht, siehe tests/.work/php.log")
