@@ -1,0 +1,39 @@
+# Dauerhafte Testinstanz fuer die Apps: webtrees7 mit diesem Modul auf Port 8717 im LAN, siehe instanz.sh
+name: api4webtrees7-instanz
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        WEBTREES7_IMAGE: ${WEBTREES7_IMAGE:-webtrees7:ed039c653d}
+    image: api4webtrees7-test:${WEBTREES7_TAG:-ed039c653d}
+    restart: unless-stopped
+    ports:
+      - "8717:80"
+    volumes:
+      - ../..:/var/www/html/modules_v4/api4webtrees:ro
+      - ${FALKENRATH_DIR:-../../../../falkenrath}:/falkenrath:ro
+      - daten:/var/www/html/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    volumes:
+      - datenbank:/var/lib/mysql
+    environment:
+      MARIADB_DATABASE: webtrees
+      MARIADB_USER: webtrees
+      MARIADB_PASSWORD: webtrees
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60
+
+volumes:
+  daten:
+  datenbank:

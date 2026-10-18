@@ -12,6 +12,8 @@ Läuft in GitHub Actions und vor jedem Release (`build-release.sh`).
 
 **webtrees7:** `tests/docker/test.sh [Image-Tag] [Test …]` testet gegen ein Image `webtrees7:<Tag>`. Dazu gehört ein Wegwerf-MariaDB, alles läuft im Container. Danach meldet `tests/docker/pruefen7.php`, was der Kern von 5.5.1 umwandeln musste und welche Datensätze nicht 7.0 sind.
 
+**Testinstanz für die Apps:** `tests/docker/instanz.sh start|stop|neu [Image-Tag]` startet webtrees7 mit diesem Modul auf Port 8717 im LAN, mit dauerhaften Daten. Beim ersten Start richtet das Skript admin/admin und die Bäume falkenrath (5.5.1, umgewandelt), gedcoml und maximal70 ein.
+
 ## Leistungscheck
 
 `python3 tests/leistung.py 10000 50000` erzeugt große Bäume (`grossbaum.py`, immer gleich), spielt sie ein und misst
