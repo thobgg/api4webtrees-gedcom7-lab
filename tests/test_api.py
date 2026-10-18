@@ -208,6 +208,11 @@ class Paten(unittest.TestCase):
         s = U.sitzung("bearbeiter")
         a = s.post("Fact", "testbaum", {"gedcom": "1 EVEN\n2 TYPE Conctest\n2 NOTE Erste Zei\n3 CONC le\n3 CONT zweite Zeile"}, xref="I4")
         self.assertEqual(True, a.json["ok"], a)
+        if umgebung.DOCKER:
+            # webtrees7: das Modul wandelt das rohe GEDCOM 5.5.1 selbst um (CONC gibt es in 7.0 nicht) und sagt es
+            self.assertEqual(True, a.json.get("converted"), a)
+            self.assertEqual("gedcom551-not-convertible", s.post("Fact", "testbaum", {"gedcom": "1 EVEN\n2 TYPE Test\n2 SOUR laut Oma"}, xref="I4").json["error"])
+            self.assertNotIn("converted", s.post("Fact", "testbaum", {"gedcom": "1 EVEN\n2 TYPE Rohtest\n2 DATE 1 JAN 1900"}, xref="I4").json)
         even = next(f for f in s.get("Individual", "testbaum", xref="I4").json["facts"] if f.get("type") == "Conctest")
         self.assertEqual(["Erste Zeile\nzweite Zeile"], even["notes"])
         self.assertEqual("Conctest", even["typeLabel"])
@@ -800,7 +805,8 @@ class GedcomL(unittest.TestCase):
         s = U.sitzung("admin")
         xrefs = ["I1", "I2", "F1", "M1", "M2", "S1", "R1", "N1", "L1", "L2"]
         vorher = {x: gedcoml_pfade(gedcoml_ged(x)) for x in xrefs}
-        self.assertGreater(sum(len(v) for v in vorher.values()), 60)
+        # Testdaten-Probe: so viele GEDCOM-Pfade hat der Baum mindestens (in 7.0 weniger: _GOV -> EXID, _UID -> UID ...)
+        self.assertGreater(sum(len(v) for v in vorher.values()), 50 if umgebung.DOCKER else 60)
         fakten = {f["tag"]: f for f in s.get("Individual", "gedcoml", xref="I1").json["facts"]}
         ok = lambda r: self.assertEqual(True, r.json.get("ok"), r)
         # Ereignisse aendern: Datum, Beruf, Name

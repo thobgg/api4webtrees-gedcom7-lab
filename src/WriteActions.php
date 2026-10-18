@@ -137,7 +137,7 @@ trait WriteActions
             }
         }
 
-        [$gedcom, $problem] = $this->checkedFactGedcom($body, $old?->gedcom() ?? '');
+        [$gedcom, $problem, $converted] = $this->checkedFactGedcom($body, $old?->gedcom() ?? '', $record->tag());
 
         if ($problem !== null) {
             return $this->error(400, $problem);
@@ -150,16 +150,22 @@ trait WriteActions
             $gedcom = $this->withLocPointers($tree, $gedcom);
         }
 
+        // Ab Stufe 37: gespeichert, aber nach GEDCOM 7.0 unvollstaendig. EVEN und FACT ohne Art bekommen wie in
+        // webtrees7 ein leeres "2 TYPE".
+        $warnings = GedcomText::factGedcomWarnings($gedcom);
+
+        if (in_array('type-required', $warnings, true) && !str_contains($gedcom, "\n2 TYPE")) {
+            $gedcom = GedcomText::insertAfterFirstLine($gedcom, "\n2 TYPE");
+        }
+
         if ($old === null) {
             $record->createFact($gedcom, true);
         } else {
             $record->updateFact($fact_id, $gedcom, true);
         }
 
-        // Ab Stufe 37: gespeichert, aber nach GEDCOM 7.0 unvollstaendig (z. B. EVEN ohne TYPE)
-        $warnings = GedcomText::factGedcomWarnings($gedcom);
-
-        return $this->written($record, $warnings === [] ? [] : ['warnings' => $warnings]);
+        // Ab Stufe 37: converted = das rohe GEDCOM war 5.5.1 und ist als 7.0 gespeichert
+        return $this->written($record, ($warnings === [] ? [] : ['warnings' => $warnings]) + ($converted ? ['converted' => true] : []));
     }
 
     /**
@@ -956,7 +962,7 @@ trait WriteActions
         $extra_gedcom = '';
 
         foreach ($extra as $spec) {
-            [$fact_gedcom, $problem] = is_array($spec) ? $this->checkedFactGedcom($spec, '') : ['', 'invalid-gedcom'];
+            [$fact_gedcom, $problem] = is_array($spec) ? $this->checkedFactGedcom($spec, '') : ['', 'invalid-gedcom', false];
 
             if ($problem !== null) {
                 return $this->error(400, $problem);
@@ -1477,9 +1483,10 @@ trait WriteActions
      *
      * @param array<string,mixed> $body
      *
-     * @return array{0:string,1:string|null} GEDCOM und Fehlercode (null = in Ordnung)
+     * @return array{0:string,1:string|null,2:bool} GEDCOM, Fehlercode (null = in Ordnung) und ob das rohe GEDCOM von 5.5.1
+     *                                           umgewandelt wurde
      */
-    private function checkedFactGedcom(array $body, string $old): array
+    private function checkedFactGedcom(array $body, string $old, string $record_type = 'INDI'): array
     {
         // Ein Wert der Form @X@ waere fuer GEDCOM ein Verweis auf einen Datensatz, kein Text.
         foreach (['value', 'place', 'note', 'type'] as $key) {
@@ -1488,13 +1495,23 @@ trait WriteActions
             }
         }
 
-        if ($this->str($body, 'gedcom') !== '') {
-            $gedcom = trim(str_replace("\r", '', $this->str($body, 'gedcom')));
-        } else {
+        if ($this->str($body, 'gedcom') === '') {
             $gedcom = $this->buildFactGedcom($body, $old);
+
+            return [$gedcom, GedcomText::factGedcomProblem($gedcom), false];
         }
 
-        return [$gedcom, GedcomText::factGedcomProblem($gedcom)];
+        $gedcom  = trim(str_replace("\r", '', $this->str($body, 'gedcom')));
+        $problem = GedcomText::factGedcomProblem($gedcom);
+
+        if ($problem !== null) {
+            return [$gedcom, $problem, false];
+        }
+
+        // Ab Stufe 37: GEDCOM 5.5.1 wird hier umgewandelt, nicht erst im Kern
+        $gedcom7 = GedcomText::factToGedcom7($record_type, $gedcom);
+
+        return $gedcom7 === null ? [$gedcom, 'gedcom551-not-convertible', false] : [$gedcom7[0], GedcomText::factGedcomProblem($gedcom7[0]), $gedcom7[1]];
     }
 
     /**

@@ -235,11 +235,12 @@ trait MergeActions
         foreach ([[$person1, $keep1], [$person2, $keep2]] as [$person, $keep]) {
             foreach ($person->facts([], false, AccessLevel::Hidden, true) as $fact) {
                 $tag = $this->shortTag($fact->tag());
-                if ($tag === 'CHAN') {
+                // CHAN setzt webtrees neu; CREA (GEDCOM 7.0, 1:1) und die Kennungen bleiben von der ersten Person
+                if ($tag === 'CHAN' || in_array($tag, ['CREA', 'UID', '_UID'], true) && $person !== $person1) {
                     continue;
                 }
                 $line   = "\n" . $fact->gedcom();
-                $always = in_array($tag, self::MERGE_LINK_TAGS, true) || $tag === '_UID' && $person === $person1;
+                $always = in_array($tag, [...self::MERGE_LINK_TAGS, 'CREA', 'UID', '_UID'], true);
                 if (($always || in_array($fact->id(), $keep, true)) && !str_contains($gedcom, $line)) {
                     $gedcom .= $line;
                 }
@@ -434,7 +435,7 @@ trait MergeActions
             $out = [];
             foreach ($person->facts([], false, AccessLevel::Hidden, true) as $fact) {
                 $tag = $this->shortTag($fact->tag());
-                if ($tag === 'CHAN' || $tag === '_UID' && !$first) {
+                if (in_array($tag, ['CHAN', 'CREA'], true) || in_array($tag, ['UID', '_UID'], true) && !$first) {
                     continue;
                 }
                 $text = trim($fact->gedcom());

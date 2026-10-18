@@ -166,9 +166,29 @@ Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt.
 
 **`@@` braucht keine Maskierung:** webtrees7 speichert ohne Escapes (`Gedcom7Record::create` entfernt sie). Das Modul schreibt also richtig, wenn es `@` unmaskiert lässt. `looksLikePointer()` verhindert weiter Werte, die wie `@X1@` aussehen.
 
-**Offen in P2**
-- Entscheidung 4: die Roh-Eingabe `{gedcom}`.
-- `ADDABLE_TAGS` um `SNOTE`/`NO` ergänzen, zusammen mit P5 (Tags).
+**Offen in P2:** erledigt, siehe unten.
+
+### Ergebnis P2 Rest, P4, P5 (18.10.2026, gegen ed039c653d)
+
+64 von 64 Tests grün. Der Kern wandelt nichts mehr um, und kein Datensatz und keine Änderung liegt außerhalb von 7.0.
+
+**Entscheidungen (18.10.2026)**
+- **2 Vertrag:** dieselbe API, nur erweitert. Wo Apps sonst brechen würden, liefert sie Werte wie bisher. Keine v2.
+- **4 Roh-`gedcom`:** erkennen und wandeln. `GedcomText::factToGedcom7()` lässt den Wandler von webtrees7 laufen.
+  - Wurde etwas gewandelt, antwortet die API `converted: true`.
+  - Was neue Datensätze bräuchte (Text-Quelle, eingebettetes Medium), lehnt sie mit `gedcom551-not-convertible` ab.
+- **5 `_STAT`:** bleibt die GEDCOM-L-Erweiterung. `NO MARR` kommt mit P6.
+
+**Damit die Apps unverändert laufen (Stufe 37)**
+- `date.gedcom` bleibt in 5.5.1-Form (`@#DJULIAN@ …`, `INT … (…)`), über `Gedcom551Downgrade`. So geht beim Bearbeiten in der App kein Wortlaut verloren. Neu sind `date.gedcom7` und `date.phrase`.
+- `1 SNOTE @N1@` kommt als `tag: "NOTE"` mit `noteXref`. Neu ist `gedcomTag`.
+- `EVEN`/`FACT` ohne Art: Die Apps haben dafür kein Feld. Die API speichert sie deshalb wie webtrees7 mit leerem `2 TYPE` und antwortet `warnings: ["type-required"]`.
+- `CREA` steht wie `CHAN` nicht in der Faktenliste.
+- `Info.gedcom` = `7.0`, je Baum `gedcom` (`7.0` oder `5.5.1`, solange nicht umgewandelt).
+
+**P4 Zusammenführen:** `CREA`, `UID` und `_UID` kommen von der ersten Person. Vorher hätte ein zweites `CREA` webtrees7 zu `_CREA` gezwungen. Der GEDCOM-L-Rundlauf verliert nichts. Nur die Probe auf die Pfadzahl war für 7.0 zu hoch.
+
+**P5 Doku:** `tests/docker/manifest.sh` erzeugt `API.md` und `openapi.json` aus Antworten von webtrees7. `Tags` bleibt unverändert, weil die App mit `SNOTE` oder `NO` aus der Tag-Liste nichts anfangen könnte (kommt mit P6).
 
 ### P3 Orte und `_LOC`
 

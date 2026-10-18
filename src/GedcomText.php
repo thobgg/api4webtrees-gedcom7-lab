@@ -6,7 +6,9 @@ namespace Api4Webtrees;
 
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\Gedcom7\Gedcom551Downgrade;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Converter;
 use Fisharebest\Webtrees\Gedcom7\Gedcom7Payload;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Record;
 
 use function array_map;
 use function array_slice;
@@ -76,6 +78,26 @@ final class GedcomText
         }
 
         return null;
+    }
+
+    /**
+     * Ein Ereignis aus dem rohen Feld "gedcom" als GEDCOM 7.0. Clients duerfen 5.5.1 schicken ("2 RELA godfather",
+     * "@#DJULIAN@"); was sich ohne neuen Datensatz nicht umwandeln laesst (Text-Quelle "2 SOUR Text", eingebettetes
+     * Medium), gibt null. Sonst das Ereignis und ob es umgewandelt wurde.
+     *
+     * @return array{0:string,1:bool}|null
+     */
+    public static function factToGedcom7(string $record_type, string $gedcom): array|null
+    {
+        $record    = '0 @X@ ' . $record_type . "\n" . $gedcom;
+        $converter = new Gedcom7Converter();
+        $gedcom7   = (new Gedcom7Record())->create($converter->convertRecord($record));
+
+        if ($converter->generatedRecords() !== []) {
+            return null;
+        }
+
+        return [substr($gedcom7, strlen('0 @X@ ' . $record_type . "\n")), $gedcom7 !== $record];
     }
 
     /**
