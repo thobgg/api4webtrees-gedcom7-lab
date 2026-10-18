@@ -80,7 +80,15 @@ Ergebnis: 61 Tests, davon 43 grün und 18 rot (14 FAIL, 4 ERROR). Der Kern hat 5
 | Zusammenführen: neuer Fakt `CREA` | 1 | P4 |
 | Folgefehler im Ortsteil (Umbenennen) und im Zugangstest | 2 | P3, prüfen |
 
-Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt. `maximal70.ged` fehlt noch.
+Die heutigen Testdaten sind 5.5.1. Sie werden beim Einlesen umgewandelt.
+
+**Nachtrag P0:**
+- Die Kompatibilitätszweige für 2.2 sind entfernt (`Compat.php`).
+- webtrees7 ist nicht das 2.3, das der Branch `webtrees-2.3` annahm. Es kennt `I18N::compare()` und `activeLanguages()`, aber nicht `comparator()` und `activeLocales()`. Das Modul nutzt jetzt direkt, was webtrees7 hat.
+- `maximal70.ged` wird beim Test geladen: gedcom.io, Commit a7b136b, mit Prüfsumme. Daraus wird der private Baum `maximal70`.
+- Der neue Test `Gedcom7.test_alles_lesen` ruft jede Leseroute für alle Datensätze dieses Baums auf. Er ist grün.
+- Gegen `webtrees7:ed039c653d` (C5 + C7) ergibt sich dasselbe Bild wie gegen 76ac5d81d1: 44 von 62 Tests grün, dieselben 18 rot, 5 Umwandlungen, 0 Datensätze außerhalb von 7.0.
+- Ab jetzt wird gegen `ed039c653d` gemessen.
 
 ### P1 Lesen
 

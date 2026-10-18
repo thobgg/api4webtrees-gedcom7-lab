@@ -38,6 +38,10 @@ PRUEFSUMMEN = {
     "2.2.6": "c6b82f0269733b71de1a160a93eb32029e3467674e9bbfe3956d46a8bb04f925",
 }
 
+# GEDCOM 7.0 (nur WEBTREES_DOCKER): maximal70.ged von gedcom.io, fester Stand. Lizenz ungeklaert, darum nicht im Repo.
+MAXIMAL70 = ("https://raw.githubusercontent.com/FamilySearch/GEDCOM.io/a7b136b777add6fe5796bcc49f61dfa1631c0ec2/testfiles/gedcom70/maximal70.ged",
+             "c7af0efc36d2630be965d8c17ecbbcf6b64c6cde9bca3bebed661a06226d43e8")
+
 # Konten je Rolle (webtrees: canedit none/access/edit/accept/admin). "admin" legt der Assistent an.
 PASSWORT = "test-passwort-1"
 KONTEN = {"mitglied": "access", "bearbeiter": "edit", "verwalter": "admin"}
@@ -70,6 +74,16 @@ def _zip():
         if ist != soll:
             os.remove(ziel)
             raise RuntimeError(f"Pruefsumme webtrees-{fassung}.zip: {ist}")
+    return ziel
+
+
+def _maximal70():
+    url, soll = MAXIMAL70
+    ziel = os.path.join(ARBEIT, "maximal70.ged")
+    urllib.request.urlretrieve(url, ziel)
+    ist = hashlib.sha256(open(ziel, "rb").read()).hexdigest()
+    if ist != soll:
+        raise RuntimeError(f"Pruefsumme maximal70.ged: {ist}")
     return ziel
 
 
@@ -157,8 +171,11 @@ class Umgebung:
                                    ("gedcoml", "GEDCOM-L", "gedcoml.ged")):
             wt("tree", name, "--create", f"--title={titel}")
             wt("tree-import", name, os.path.join(HIER, datei))
+        if DOCKER:
+            wt("tree", "maximal70", "--create", "--title=GEDCOM 7.0")
+            wt("tree-import", "maximal70", _maximal70())
         # testbaum oeffentlich (Gaeste sehen Verstorbene), geheim nur fuer Angemeldete mit Rolle.
-        sql("UPDATE wt_gedcom SET private=1 WHERE gedcom_name IN ('geheim', 'gedcoml')")
+        sql("UPDATE wt_gedcom SET private=1 WHERE gedcom_name IN ('geheim', 'gedcoml', 'maximal70')")
         wt("tree-setting", "testbaum", "HIDE_LIVE_PEOPLE", "1")
         wt("user-setting", "admin", "auto_accept", "1")
         for name, rolle in KONTEN.items():

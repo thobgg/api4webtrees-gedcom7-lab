@@ -6,8 +6,8 @@ services:
     build:
       context: .
       args:
-        WEBTREES7_IMAGE: ${WEBTREES7_IMAGE:-webtrees7:76ac5d81d1}
-    image: api4webtrees7-test:${WEBTREES7_TAG:-76ac5d81d1}
+        WEBTREES7_IMAGE: ${WEBTREES7_IMAGE:-webtrees7:ed039c653d}
+    image: api4webtrees7-test:${WEBTREES7_TAG:-ed039c653d}
     volumes:
       - ../..:/var/www/html/modules_v4/api4webtrees:ro
     tmpfs:

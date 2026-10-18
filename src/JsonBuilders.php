@@ -7,6 +7,8 @@ namespace Api4Webtrees;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\Elements\RelationIsDescriptor;
 use Fisharebest\Webtrees\Elements\UnknownElement;
+use Fisharebest\Webtrees\Enums\AccessLevel;
+use Fisharebest\Webtrees\Enums\Sex;
 use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\GedcomRecord;
@@ -18,6 +20,7 @@ use Fisharebest\Webtrees\PlaceLocation;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\Repository;
 use Fisharebest\Webtrees\Source;
+use Fisharebest\Webtrees\Services\FactSortService;
 use Fisharebest\Webtrees\Services\LinkedRecordService;
 use Fisharebest\Webtrees\Tree;
 use Illuminate\Support\Collection;
@@ -25,7 +28,6 @@ use Illuminate\Support\Collection;
 use function array_keys;
 use function array_map;
 use function array_pad;
-use function class_exists;
 use function explode;
 use function implode;
 use function html_entity_decode;
@@ -64,7 +66,7 @@ trait JsonBuilders
             }
         }
 
-        return Compat::sex($individual);
+        return $individual->sex()->value;
     }
 
     /**
@@ -119,7 +121,7 @@ trait JsonBuilders
             // sehen duerften - fuer Buecher zum Weitergeben ("nur, was Besucher sehen")
             'access'     => $this->zugang($individual),
             // wer den Namen sehen darf - bei Lebenden haengt das an der Baumeinstellung "Namen Lebender zeigen"
-            'nameAccess' => $individual->canShowName(Compat::access(Compat::PUBLIC)) ? 'visitor' : ($individual->canShowName(Compat::access(Compat::MEMBER)) ? 'member' : 'manager'),
+            'nameAccess' => $individual->canShowName(AccessLevel::Public) ? 'visitor' : ($individual->canShowName(AccessLevel::Member) ? 'member' : 'manager'),
             'restricted' => $this->eingeschraenkt($individual),
             'lifespan'   => $this->plain($individual->lifespan()),
             'birth'      => $this->eventJson($individual->getBirthDate(), $individual->getBirthPlace()),
@@ -374,11 +376,11 @@ trait JsonBuilders
      */
     private function zugang(GedcomRecord|Fact $x): string
     {
-        if ($x->canShow(Compat::access(Compat::PUBLIC))) {
+        if ($x->canShow(AccessLevel::Public)) {
             return 'visitor';
         }
 
-        return $x->canShow(Compat::access(Compat::MEMBER)) ? 'member' : 'manager';
+        return $x->canShow(AccessLevel::Member) ? 'member' : 'manager';
     }
 
     /**
@@ -389,12 +391,12 @@ trait JsonBuilders
      */
     private function eingeschraenkt(Individual $individual): array
     {
-        if (!$individual->canShow(Compat::access(Compat::PUBLIC))) {
+        if (!$individual->canShow(AccessLevel::Public)) {
             return [];
         }
         $tags = [];
         foreach ($individual->facts(['BIRT', 'CHR', 'BAPM', 'DEAT', 'BURI', 'CREM', 'OCCU']) as $fact) {
-            if (!$fact->canShow(Compat::access(Compat::PUBLIC))) {
+            if (!$fact->canShow(AccessLevel::Public)) {
                 $tags[] = $this->shortTag($fact->tag());
             }
         }
@@ -567,7 +569,7 @@ trait JsonBuilders
     {
         $element = Registry::elementFactory()->make('INDI:*:_ASSO:RELA');
         $element = $element instanceof RelationIsDescriptor ? $element : new RelationIsDescriptor('');
-        $values  = $element->values(Compat::sexArgument($sex)) + $element->values(Compat::sexArgument('U'));
+        $values  = $element->values(Sex::tryFrom($sex) ?? Sex::Unknown) + $element->values(Sex::Unknown);
         $key     = mb_strtolower(trim($rela));
 
         return $values[$key] ?? ($role === 'other' ? $rela : $values[$role] ?? $rela);
@@ -1052,21 +1054,13 @@ trait JsonBuilders
     }
 
     /**
-     * webtrees 2.2: Fact::sortFacts() - ab 2.3: FactSortService::sort().
-     *
      * @param Collection<int,Fact> $facts
      *
      * @return Collection<int,Fact>
      */
     private function sortFacts(Collection $facts): Collection
     {
-        $service = 'Fisharebest\\Webtrees\\Services\\FactSortService';
-
-        if (class_exists($service)) {
-            return Registry::container()->get($service)->sort($facts);
-        }
-
-        return Fact::sortFacts($facts);
+        return Registry::container()->get(FactSortService::class)->sort($facts);
     }
 
     /**

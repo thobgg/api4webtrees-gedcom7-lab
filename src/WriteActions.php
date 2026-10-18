@@ -6,9 +6,11 @@ namespace Api4Webtrees;
 
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\DB;
+use Fisharebest\Webtrees\Enums\AccessLevel;
 use Fisharebest\Webtrees\Exceptions\FileUploadException;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\Fact;
+use Fisharebest\Webtrees\Http\Controllers\DeleteRecord;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\FlashMessages;
 use Fisharebest\Webtrees\GedcomRecord;
@@ -36,7 +38,6 @@ use function array_splice;
 use function array_pad;
 use function array_keys;
 use function array_filter;
-use function class_exists;
 use function explode;
 use function implode;
 use function in_array;
@@ -1126,17 +1127,7 @@ trait WriteActions
 
         $request = $request->withAttribute('xref', $xref);
 
-        // webtrees 2.2: RequestHandlers\DeleteRecord::handle() - ab 2.3: Controllers\DeleteRecord::post()
-        $old = 'Fisharebest\\Webtrees\\Http\\RequestHandlers\\DeleteRecord';
-        $new = 'Fisharebest\\Webtrees\\Http\\Controllers\\DeleteRecord';
-
-        if (class_exists($old)) {
-            Registry::container()->get($old)->handle($request);
-        } elseif (class_exists($new)) {
-            Registry::container()->get($new)->post($request, $tree);
-        } else {
-            return $this->error(501, 'not-supported');
-        }
+        Registry::container()->get(DeleteRecord::class)->post($request, $tree);
 
         // Die Hinweise ("Die Familie ... wurde geloescht") sind fuer die Weboberflaeche gedacht - hier verwerfen,
         // sonst tauchen sie beim naechsten Seitenaufruf im Browser auf.
@@ -1385,7 +1376,7 @@ trait WriteActions
         // Ein Schreibvorgang statt einem je Verknuepfung - also auch nur eine ausstehende Aenderung.
         $lines = ['0 @' . $record->xref() . '@ ' . $record->tag()];
 
-        foreach ($record->facts([], false, Compat::access(Compat::HIDDEN), true) as $fact) {
+        foreach ($record->facts([], false, AccessLevel::Hidden, true) as $fact) {
             if (!in_array($fact, $links, true)) {
                 $lines[] = $fact->gedcom();
             }
@@ -1416,7 +1407,7 @@ trait WriteActions
             return $this->error(404, 'link-not-found');
         }
 
-        $first = $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)->first();
+        $first = $record->facts(['OBJE'], false, AccessLevel::Hidden, true)->first();
 
         // Ab Stufe 35 auch nach GEDCOM-L: "2 _PRIM Y" an diesem Verweis, an den anderen Verweisen faellt _PRIM weg -
         // so zeigen andere Programme dasselbe Hauptbild wie webtrees (das erste Bild).
@@ -1426,7 +1417,7 @@ trait WriteActions
             return substr($gedcom, 1);
         };
         $schon = $first === $links[0] && strtoupper(trim($links[0]->attribute('_PRIM'))) === 'Y'
-            && $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)->filter(static fn (Fact $f): bool => $f !== $links[0] && $f->attribute('_PRIM') !== '')->isEmpty();
+            && $record->facts(['OBJE'], false, AccessLevel::Hidden, true)->filter(static fn (Fact $f): bool => $f !== $links[0] && $f->attribute('_PRIM') !== '')->isEmpty();
 
         if ($schon) {
             return $this->written($record);
@@ -1434,7 +1425,7 @@ trait WriteActions
 
         $lines = ['0 @' . $record->xref() . '@ ' . $record->tag()];
 
-        foreach ($record->facts([], false, Compat::access(Compat::HIDDEN), true) as $fact) {
+        foreach ($record->facts([], false, AccessLevel::Hidden, true) as $fact) {
             if ($fact === $first) {
                 $lines[] = $prim($links[0], true);
             }
@@ -1460,7 +1451,7 @@ trait WriteActions
             return [];
         }
 
-        return $record->facts(['OBJE'], false, Compat::access(Compat::HIDDEN), true)
+        return $record->facts(['OBJE'], false, AccessLevel::Hidden, true)
             ->filter(static fn (Fact $fact): bool => $fact->value() === '@' . $media_xref . '@')
             ->values()
             ->all();

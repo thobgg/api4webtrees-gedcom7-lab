@@ -9,6 +9,7 @@ use Fisharebest\ExtCalendar\GregorianCalendar;
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\Contracts\UserInterface;
 use Fisharebest\Webtrees\DB;
+use Fisharebest\Webtrees\Enums\AccessLevel;
 use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\Http\Exceptions\HttpServiceUnavailableException;
@@ -360,12 +361,12 @@ trait ReadActions
     private function availableModules(Tree $tree, UserInterface $user): array
     {
         $module_service = Registry::container()->get(ModuleService::class);
-        $user_level     = Compat::level(Auth::accessLevel($tree, $user));
+        $user_level     = Auth::accessLevel($tree, $user)->value;
 
         return $module_service->all()
             ->filter(static fn (ModuleInterface $module): bool => $module_service->componentsWithAccess()
                 ->filter(static fn (string $interface): bool => $module instanceof $interface)
-                ->every(static fn (string $interface): bool => Compat::level($module->accessLevel($tree, $interface)) >= $user_level))
+                ->every(static fn (string $interface): bool => $module->accessLevel($tree, $interface)->value >= $user_level))
             ->map(static fn (ModuleInterface $module): string => $module->name())
             ->sort()
             ->values()
@@ -495,10 +496,7 @@ trait ReadActions
     {
         $tree  = Validator::attributes($request)->tree();
         $days  = min(self::ANNIV_MAX_DAYS, max(1, Validator::queryParams($request)->integer('days', self::ANNIV_DEFAULT_DAYS)));
-        // In webtrees 2.2 liefert timestampFactory()->now() ein Timestamp, das julianDay() kennt;
-        // ab 2.3 kommt direkt ein CarbonImmutable, und dort wirft der Aufruf ("Method julianDay does
-        // not exist."). Der Umweg ueber die Gregorianische Kalenderklasse, die webtrees ohnehin
-        // mitbringt und im Kern selbst benutzt, laeuft auf beiden Fassungen.
+        // timestampFactory()->now() ist ein CarbonImmutable ohne julianDay()
         $now   = Registry::timestampFactory()->now();
         $today = (new GregorianCalendar())->ymdToJd((int) $now->format('Y'), (int) $now->format('n'), (int) $now->format('j'));
 
@@ -946,7 +944,7 @@ trait ReadActions
         $offset = ($page - 1) * self::EXPORT_PAGE_SIZE;
 
         // Dieselbe Stufe, die webtrees fuer Verknuepfungen nimmt (siehe Individual::childFamilies()).
-        $link_level = $tree->getPreference('SHOW_PRIVATE_RELATIONSHIPS') === '1' ? Compat::access(Compat::HIDDEN) : Auth::accessLevel($tree);
+        $link_level = $tree->getPreference('SHOW_PRIVATE_RELATIONSHIPS') === '1' ? AccessLevel::Hidden : Auth::accessLevel($tree);
 
         $individual_count = DB::table('individuals')->where('i_file', '=', $tree->id())->count();
         $family_count     = DB::table('families')->where('f_file', '=', $tree->id())->count();
@@ -1105,7 +1103,7 @@ trait ReadActions
             ->map(Registry::sourceFactory()->mapper($tree))
             ->filter(static fn ($source): bool => $source instanceof Source && $source->canShow())
             ->map(fn (Source $source): array => $this->sourceSummary($source) + ['uses' => (int) ($uses[$source->xref()] ?? 0)])
-            ->sort(static fn (array $a, array $b): int => Compat::comparator()($a['title'], $b['title']))
+            ->sort(static fn (array $a, array $b): int => I18N::compare($a['title'], $b['title']))
             ->values()
             ->all();
 
@@ -1134,7 +1132,7 @@ trait ReadActions
                 'canEdit' => $repo->canEdit(),
                 'uses'    => (int) ($uses[$repo->xref()] ?? 0),
             ])
-            ->sort(static fn (array $a, array $b): int => Compat::comparator()($a['name'], $b['name']))
+            ->sort(static fn (array $a, array $b): int => I18N::compare($a['name'], $b['name']))
             ->values()
             ->all();
 

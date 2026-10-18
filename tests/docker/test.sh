@@ -1,9 +1,9 @@
 #!/bin/sh
 # tests/test_api.py gegen webtrees7 in Docker.  Aufruf: tests/docker/test.sh [Image-Tag] [Testname ...]
-# Beispiel: tests/docker/test.sh 76ac5d81d1 Paten
+# Beispiel: tests/docker/test.sh ed039c653d Paten
 set -e
 cd "$(dirname "$0")"
-TAG=${1:-76ac5d81d1}
+TAG=${1:-ed039c653d}
 [ $# -gt 0 ] && shift
 export WEBTREES7_IMAGE="webtrees7:$TAG" WEBTREES7_TAG="$TAG"
 

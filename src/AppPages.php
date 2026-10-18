@@ -445,16 +445,12 @@ trait AppPages
     }
 
     /**
-     * QR-Code als SVG. webtrees 2.2 bringt dafuer TCPDF mit, 2.3 tc-lib-barcode; fehlt beides, bleibt es beim Link.
+     * QR-Code als SVG mit tc-lib-barcode aus webtrees; ohne bleibt es beim Link.
      */
     private function qrSvg(string $data): string
     {
         try {
             // 5 Pixel je Modul (Kaestchen); tc-lib-barcode versteht negative Masse als Modulgroesse statt Gesamtgroesse.
-            if (class_exists('TCPDF2DBarcode')) {
-                return (new \TCPDF2DBarcode($data, 'QRCODE,M'))->getBarcodeSVGcode(5, 5, 'black');
-            }
-
             if (class_exists('Com\\Tecnick\\Barcode\\Barcode')) {
                 return (new \Com\Tecnick\Barcode\Barcode())->getBarcodeObj('QRCODE,M', $data, -5, -5, 'black')->getSvgCode();
             }

@@ -724,6 +724,27 @@ def gedcoml_pfade(gedcom):
     return pfade
 
 
+@unittest.skipUnless(umgebung.DOCKER, "nur gegen webtrees7")
+class Gedcom7(unittest.TestCase):
+    """maximal70.ged von gedcom.io: jede Struktur von GEDCOM 7.0 mindestens einmal. Jede Leseroute muss sie vertragen."""
+
+    def test_alles_lesen(self):
+        s = U.sitzung("admin")
+        baum = umgebung.sql("SELECT gedcom_id FROM wt_gedcom WHERE gedcom_name = 'maximal70'")[0][0]
+        aufrufe = [("Individuals", {"q": ""}), ("Sources", {}), ("Repositories", {}), ("MediaList", {}),
+                   ("Places", {"q": ""}), ("Export", {"page": 1}), ("Anniversaries", {"days": 60})]
+        aufrufe += [("Individual", {"xref": x}) for (x,) in umgebung.sql("SELECT i_id FROM wt_individuals WHERE i_file = ?", baum)]
+        aufrufe += [("Family", {"xref": x}) for (x,) in umgebung.sql("SELECT f_id FROM wt_families WHERE f_file = ?", baum)]
+        aufrufe += [("Source", {"xref": x}) for (x,) in umgebung.sql("SELECT s_id FROM wt_sources WHERE s_file = ?", baum)]
+        self.assertGreater(len(aufrufe), 7 + 4)
+        for aktion, params in aufrufe:
+            with self.subTest(aktion=aktion, **params):
+                a = s.get(aktion, "maximal70", **params)
+                self.assertEqual(200, a.status, a)
+                self.assertIsNotNone(a.json, a)
+                self.assertNotEqual(False, a.json.get("ok") if isinstance(a.json, dict) else None, a)
+
+
 class GedcomL(unittest.TestCase):
     """Stufe 34: alle Angaben des GEDCOM-L-Addendums lesen - und nichts davon verlieren, wenn die App schreibt."""
 

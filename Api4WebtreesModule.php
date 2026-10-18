@@ -27,6 +27,7 @@ use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Throwable;
 
+use function array_keys;
 use function array_map;
 use function basename;
 use function explode;
@@ -369,7 +370,7 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
      */
     private function matchLanguage(string $wanted): string|null
     {
-        $tags    = Compat::activeLanguageTags();
+        $tags    = array_map('strval', array_keys(I18N::activeLanguages()));
         $wanted  = strtolower($wanted);
         $primary = explode('-', $wanted)[0];
 
@@ -390,19 +391,13 @@ class Api4WebtreesModule extends AbstractModule implements ModuleCustomInterface
     }
 
     /**
-     * Adresse einer Aktion dieses Moduls. Die Route heisst in webtrees 2.2 "module", ab 2.3 traegt sie den Klassennamen.
+     * Adresse einer Aktion dieses Moduls.
      *
      * @param array<string,string> $params
      */
     private function actionUrl(string $action, string|null $tree, array $params = []): string
     {
-        $all = ['module' => $this->name(), 'action' => $action, 'tree' => $tree] + $params;
-
-        try {
-            return route('module', $all);
-        } catch (Throwable) {
-            return route(ModuleAction::class, $all);
-        }
+        return route(ModuleAction::class, ['module' => $this->name(), 'action' => $action, 'tree' => $tree] + $params);
     }
 
     /**
