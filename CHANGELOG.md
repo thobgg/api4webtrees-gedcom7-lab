@@ -8,6 +8,11 @@ types); `date.gedcom` stays in GEDCOM 5.5.1 form for the apps, `date.gedcom7` an
 come as `NOTE` with `noteXref`, `gedcomTag` is the stored tag; raw GEDCOM 5.5.1 in `POST Fact` is converted
 (`converted: true`); no update check against 1.x.
 
+Version 2.0.1 (2026-10-22): webtrees7 stores the GOV identifier of a location as `EXID` with `TYPE https://gov.genealogy.net/`
+and the unique identifier as `UID` (since 2.3.0-webtrees7.1+f58966eac6, GEDCOM-L location records in the schema). The
+module reads and writes `gov` in that form, still reads `_GOV`, and `uids` lists `UID` as well as `_UID`. A text source
+inside a location record becomes a source record on import, so it appears in `Sources`.
+
 ## 1.22.0 – 2026-10-14
 API level 36, unchanged. **webtrees mobile for Android** (Google Play), added by Andreas Scharf: the app is now listed
 for Android phones as well as for iPhone and iPad, with the Google Play badge. **The “App” and “Connect” pages name the

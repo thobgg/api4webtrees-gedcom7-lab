@@ -278,7 +278,8 @@ class Orte(unittest.TestCase):
         self.assertEqual(1800, o["individuals"][1]["facts"][0]["date"]["year"])
         loc = o["location"]
         self.assertEqual(("L1", "Offenbach", "OFFACHJO40BC", ["Stadt am Main"]), (loc["xref"], loc["name"], loc["gov"], loc["notes"]))
-        self.assertEqual([(None, "https://de.wikipedia.org/wiki/Offenbach_am_Main"), ("S1", "Ortsbeschreibung")], [(q["xref"], q["page"] or q["title"]) for q in loc["sources"]])
+        # die Text-Quelle des _LOC ist seit webtrees7 2.3.0-webtrees7.1+f58966eac6 ein Quellen-Datensatz
+        self.assertEqual([("_S7_2", "https://de.wikipedia.org/wiki/Offenbach_am_Main"), ("S1", "Ortsbeschreibung")], [(q["xref"], q["page"] or q["title"]) for q in loc["sources"]])
         self.assertEqual(("63065", "Hessen", None), (loc["postalCode"], loc["region"], loc["country"]))
         self.assertAlmostEqual(8.766667, loc["lng"], places=5)
         b = U.sitzung("verwalter").get("Place", "testbaum", name="Bieber, Offenbach").json
@@ -369,12 +370,13 @@ class Orte(unittest.TestCase):
         self.assertEqual("Offb.", next(o for o in s.get("Places", "testbaum", list=1).json["places"] if o["name"] == "Offenbach")["shortName"])
         s.post("Place", "testbaum", {"name": "Offenbach", "shortName": ""})
         self.assertIsNone(s.get("Place", "testbaum", name="Offenbach").json["location"]["shortName"])
-        # Postleitzahl (vorhandene Schreibweise POST bleibt), Region, Land
+        # Postleitzahl, Region, Land - webtrees7 speichert die Postleitzahl des _LOC als _POST (GEDCOM-L), auch wenn die
+        # Datei POST hatte
         self.assertEqual(True, s.post("Place", "testbaum", {"name": "Offenbach", "postalCode": "63067", "country": "Deutschland"}).json["ok"])
         loc = s.get("Place", "testbaum", name="Offenbach").json["location"]
         self.assertEqual(("63067", "Hessen", "Deutschland"), (loc["postalCode"], loc["region"], loc["country"]))
         ged = umgebung.sql("SELECT o_gedcom FROM wt_other WHERE o_id = 'L1'")[0][0]
-        self.assertIn("1 POST 63067", ged); self.assertIn("1 _CTRY Deutschland", ged); self.assertNotIn("_POST", ged)
+        self.assertIn("1 _POST 63067", ged); self.assertIn("1 _CTRY Deutschland", ged); self.assertNotIn("1 POST ", ged)
         # Koordinaten entfernen
         s.post("Place", "testbaum", {"name": "Offenbach", "lat": None, "lng": None})
         self.assertIsNone(s.get("Place", "testbaum", name="Offenbach").json["location"]["lat"])
@@ -1067,8 +1069,10 @@ class Schreiben(unittest.TestCase):
     def test_quellen_liste_und_einzeln(self):
         s = U.sitzung("bearbeiter")
         liste = s.get("Sources", "testbaum").json
-        self.assertEqual(["S1", "_S7_1"], [x["xref"] for x in liste["sources"]])  # S2 ist vertraulich, _S7_1 die Text-Quelle
-        s1 = liste["sources"][0]
+        # S2 ist vertraulich; _S7_1 und _S7_2 sind die Text-Quellen (Beruf von I1, Wikipedia-Link des _LOC L1), die
+        # webtrees7 beim Einlesen zu Datensaetzen macht; sortiert nach Titel
+        self.assertEqual(["_S7_2", "S1", "_S7_1"], [x["xref"] for x in liste["sources"]])
+        s1 = liste["sources"][1]
         self.assertEqual(("Pfarramt Offenbach", "Offenbach, 1790–1830", "Bistumsarchiv Mainz", "KB 12", 4),
                          (s1["author"], s1["publication"], s1["repository"], s1["callNumber"], s1["uses"]))
         einzeln = s.get("Source", "testbaum", xref="S1").json
@@ -1077,7 +1081,7 @@ class Schreiben(unittest.TestCase):
         self.assertEqual({("I1", ("Geburt", "Kindstaufe")), ("I2", ("Tod",))}, {(p["xref"], tuple(p["facts"])) for p in einzeln["individuals"]})
         self.assertEqual("private", s.get("Source", "testbaum", xref="S2").json["error"])
         verwalter = U.sitzung("verwalter").get("Sources", "testbaum").json
-        self.assertEqual(["Kirchenbuch Offenbach", "laut Martha Meier", "Markerkonfidenz-Quelle"], [x["title"] for x in verwalter["sources"]])
+        self.assertEqual(["https://de.wikipedia.org/wiki/Offenbach_am_Main", "Kirchenbuch Offenbach", "laut Martha Meier", "Markerkonfidenz-Quelle"], [x["title"] for x in verwalter["sources"]])
 
     def test_quellenverweis_schreiben(self):
         # Verweis anlegen, gezielt aendern, verschieben, loeschen - das Ereignis und die anderen Teile bleiben unberuehrt.

@@ -9,6 +9,7 @@ use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\DB;
 use Fisharebest\Webtrees\Fact;
 use Fisharebest\Webtrees\Family;
+use Fisharebest\Webtrees\Gedcom7\Gedcom7Converter;
 use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
@@ -445,7 +446,7 @@ trait PlaceActions
 
         if (array_key_exists('gov', $body)) {
             $gov  = trim($this->str($body, 'gov'));
-            $rest = GedcomText::replaceSubrecords($rest, 1, '_GOV', $gov === '' ? '' : "\n1 _GOV " . $gov);
+            $rest = self::withGov($rest, $gov);
         }
 
         if (array_key_exists('lat', $body) || array_key_exists('lng', $body)) {
@@ -924,10 +925,13 @@ trait PlaceActions
     {
         preg_match_all('/\n1 (\S+)[^\n]*(?:\n[2-9] [^\n]*)*/', "\n" . $existing, $blocks, PREG_SET_ORDER);
         foreach ($blocks as [$block, $tag]) {
-            if (in_array($tag, ['NAME', 'CHAN', '_UID'], true)) {
+            if (in_array($tag, ['NAME', 'CHAN', 'UID', '_UID'], true)) {
                 continue;
             }
-            if (in_array($tag, ['_GOV', 'MAP'], true) && preg_match('/\n1 ' . $tag . '\b/', $target) === 1) {
+            if ($tag === 'MAP' && preg_match('/\n1 MAP\b/', $target) === 1) {
+                continue;
+            }
+            if (($tag === '_GOV' || $tag === 'EXID' && self::govOf($block) !== null) && self::govOf($target) !== null) {
                 continue;
             }
             if (!str_contains($target, $block)) {
@@ -1661,7 +1665,7 @@ trait PlaceActions
             'demographics' => $liste('_DMGD', ['type' => 'TYPE']),
             'maidenhead'   => $einzel('_MAIDENHEAD'),
             'religion'     => $einzel('RELI'),
-            'uids'         => array_column($liste('_UID', []), 'value'),
+            'uids'         => array_column([...$liste('UID', []), ...$liste('_UID', [])], 'value'),
         ];
     }
 
@@ -1735,9 +1739,40 @@ trait PlaceActions
 
     private function locGov(Location $location): string|null
     {
-        $gov = trim(GedcomText::firstValue($location->gedcom(), 1, '_GOV'));
+        return self::govOf($location->gedcom());
+    }
+
+    /**
+     * Die GOV-Kennung eines _LOC: GEDCOM 7.0 "1 EXID <Kennung>" mit "2 TYPE https://gov.genealogy.net/" (so speichert
+     * webtrees7 seit 2.3.0-webtrees7.1+f58966eac6), aeltere Daten GEDCOM-L "1 _GOV <Kennung>".
+     */
+    public static function govOf(string $gedcom): string|null
+    {
+        foreach (GedcomText::subrecords($gedcom, 1, 'EXID') as [$value, $sub]) {
+            if (trim($value) !== '' && trim(GedcomText::firstValue($sub, 2, 'TYPE')) === Gedcom7Converter::EXID_GOV) {
+                return trim($value);
+            }
+        }
+
+        $gov = trim(GedcomText::firstValue($gedcom, 1, '_GOV'));
 
         return $gov === '' ? null : $gov;
+    }
+
+    /**
+     * Die GOV-Kennung eines _LOC setzen oder (leer) entfernen: die alte Form "1 _GOV" und EXIDs vom GOV-Typ gehen weg,
+     * die neue steht als EXID mit TYPE, wie webtrees7 sie schreibt.
+     */
+    private static function withGov(string $rest, string $gov): string
+    {
+        $rest = GedcomText::replaceSubrecords($rest, 1, '_GOV', '');
+        $rest = (string) preg_replace_callback(
+            '/\n1 EXID[^\n]*(?:\n[2-9][^\n]*)*/',
+            static fn (array $m): string => trim(GedcomText::firstValue($m[0], 2, 'TYPE')) === Gedcom7Converter::EXID_GOV ? '' : $m[0],
+            $rest
+        );
+
+        return $gov === '' ? $rest : $rest . "\n1 EXID " . $gov . "\n2 TYPE " . Gedcom7Converter::EXID_GOV;
     }
 
     /**
