@@ -2,12 +2,19 @@
 
 **English** · [Deutsch](README.de.md)
 
+> **This is the 2.x line of api4webtrees for [webtrees-gedcom7-lab](https://github.com/thobgg/webtrees-gedcom7-lab)**, an
+> experiment in which webtrees stores GEDCOM 7.0 natively. It is not an official webtrees module and not meant for
+> everyday use. The module for webtrees 2.2 and 2.3 (GEDCOM 5.5.1) is
+> [api4webtrees](https://github.com/thobgg/api4webtrees). The desktop programs for this line, wtWin7, wtTux7 and
+> wtMac7, are built on request in [app4webtrees](https://github.com/thobgg/app4webtrees#wtwin7-wttux7-and-wtmac7-an-experiment-for-gedcom-70);
+> wtAnd works with both lines.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/thobgg/app4webtrees/main/docs/icon/icon-512.png" alt="wtAnd logo" width="112">
 </p>
 
 <p align="center">
-  <a href="https://github.com/thobgg/api4webtrees/releases/latest"><img src="https://img.shields.io/badge/webtrees-module%20ZIP-1F5F99?style=for-the-badge" alt="webtrees module api4webtrees (ZIP)"></a>
+  <a href="https://github.com/thobgg/api4webtrees-gedcom7-lab/releases/latest"><img src="https://img.shields.io/badge/webtrees-module%20ZIP-1F5F99?style=for-the-badge" alt="webtrees module api4webtrees (ZIP)"></a>
   <a href="https://github.com/thobgg/app4webtrees/releases/latest"><img src="https://img.shields.io/badge/Android-wtAnd%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android: wtAnd (APK)"></a>
   <a href="https://github.com/thobgg/app4webtrees/releases/latest"><img src="https://img.shields.io/badge/Linux-wtTux%20.deb-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux: wtTux (.deb)"></a>
 </p>
