@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+Levels 39 (`Portrait`) and 40 (`MediaObject`) are taken by the 1.x line (api4webtrees, 2026-10-25) and stay free here; the
+next level of this line is 41. Levels are shared between both lines so that one client check works against both.
+
 API level 38. **For webtrees7, which stores GEDCOM 7.0** (version 2.0.0, separate from 1.x for webtrees 2.2/2.3 and
 GEDCOM 5.5.1). Level 37 as in 1.x: `details` at every fact, unknown names as `…`. Level 38: `gedcom` in `Info` and per
 tree; the module writes GEDCOM 7.0 itself (associates as `ASSO`/`ROLE`, text sources as source records, dates, media
